@@ -1,5 +1,5 @@
 ﻿
-namespace miniMOO.Engine.Things;
+namespace miniMOO.Core.Things;
 
 public sealed class MooProperty {
     public required string Name { get; init; }

@@ -1,5 +1,5 @@
 ﻿
-namespace miniMOO.Engine.Things;
+namespace miniMOO.Core.Things;
 
 public sealed class MooVerb {
     public List<string> Names { get; } = new();

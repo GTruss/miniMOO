@@ -1,7 +1,7 @@
+using miniMOO.Core.Things;
 using miniMOO.Engine.Repositories;
-using miniMOO.Engine.Things;
 
-namespace miniMOO.Engine.World;
+namespace miniMOO.Host.World;
 
 /// <summary>
 /// Builds the initial miniMOO world: prototype classes + a small navigable area.
@@ -51,26 +51,32 @@ public static class WorldSeeder {
         // $root — every object inherits from this
         var root = Obj(RootId, "#0", null, null, "$root");
         root.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+        Prop(root, "description", "You see nothing special.");
         repo.Add(root);
 
         // $room
         var genRoom = Obj(GenRoomId, "#0", RootId, null, "$room");
         genRoom.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+        Prop(genRoom, "description", "An empty room.");
         repo.Add(genRoom);
 
         // $exit
         var genExit = Obj(GenExitId, "#0", RootId, null, "$exit");
         genExit.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+        Prop(genExit, "description", "You see an exit.");
+        Prop(genExit, "obvious", new MooValue.Integer(1));
         repo.Add(genExit);
 
         // $thing
         var genThing = Obj(GenThingId, "#0", RootId, null, "$thing");
         genThing.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+        Prop(genThing, "description", "You see nothing special about it.");
         repo.Add(genThing);
 
         // $player
         var genPlayer = Obj(GenPlayerId, "#0", RootId, null, "$player");
         genPlayer.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+        Prop(genPlayer, "description", "A nondescript person.");
         AddPlayerVerbs(genPlayer);
         repo.Add(genPlayer);
     }
@@ -102,10 +108,14 @@ public static class WorldSeeder {
 
         // Exit: Foyer -> Library (east)
         var exitEast = Exit(new ObjectId(13), FoyerId, LibraryId, "east", "e");
+        Prop(exitEast, "description",
+            "The world shimmers around you.");
         repo.Add(exitEast);
 
         // Exit: Library -> Foyer (west)
         var exitWest = Exit(new ObjectId(14), LibraryId, FoyerId, "west", "w");
+        Prop(exitWest, "description",
+            "The world shimmers around you.");
         repo.Add(exitWest);
 
         // A worn book sitting in the library
@@ -147,6 +157,23 @@ public static class WorldSeeder {
             IndirectObject = VerbObjectSpec.None,
             ImplementationKind = VerbImplementationKind.Builtin,
             Implementation = "look"
+        });
+
+        player.Verbs.Add(new MooVerb {
+            Names = { "look", "l" },
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "at",
+            IndirectObject = VerbObjectSpec.Any,
+            Implementation = "look"   // same builtin
+        });
+
+        player.Verbs.Add(new MooVerb {
+            Names = { "@ways" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.None,
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Builtin,
+            Implementation = "ways"
         });
 
         player.Verbs.Add(new MooVerb {
@@ -213,9 +240,7 @@ public static class WorldSeeder {
     // Factory helpers
     // -------------------------------------------------------------------------
 
-    private static MooObject Obj(
-        ObjectId id, string ownerStr, ObjectId? parentId,
-        ObjectId? locationId, string name) {
+    private static MooObject Obj(ObjectId id, string ownerStr, ObjectId? parentId, ObjectId? locationId, string name) {
 
         var ownerId = ownerStr == "#0" ? ObjectId.System : id;
 
@@ -229,24 +254,23 @@ public static class WorldSeeder {
         };
     }
 
-    private static MooObject Exit(
-        ObjectId id, ObjectId sourceId, ObjectId destId,
-        string primaryName, string alias) {
+    private static MooObject Exit(ObjectId id, ObjectId sourceId, ObjectId destId, string primaryName, string alias) {
 
         var exit = Obj(id, "#0", GenExitId, sourceId, primaryName);
         exit.Aliases.Add(alias);
 
         Prop(exit, "source", new MooValue.Object(sourceId));
         Prop(exit, "destination", new MooValue.Object(destId));
-        Prop(exit, "obvious", new MooValue.Integer(1));
 
         exit.Verbs.Add(new MooVerb {
             Names = { "go", primaryName, alias },
             OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
             ImplementationKind = VerbImplementationKind.Builtin,
             Implementation = "go"
         });
-
         return exit;
     }
 

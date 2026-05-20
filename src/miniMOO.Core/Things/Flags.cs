@@ -1,4 +1,4 @@
-﻿namespace miniMOO.Engine.Things;
+﻿namespace miniMOO.Core.Things;
 
 [Flags]
 public enum ObjectFlags {

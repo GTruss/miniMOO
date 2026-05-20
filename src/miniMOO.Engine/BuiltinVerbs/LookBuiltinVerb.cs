@@ -1,9 +1,5 @@
-﻿using miniMOO.Engine.Things;
+﻿using miniMOO.Core.Things;
 using miniMOO.Engine.Verbs;
-
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace miniMOO.Engine.BuiltinVerbs;
 
@@ -11,32 +7,28 @@ public sealed class LookBuiltinVerb : IBuiltinVerb {
     public string Name => "look";
 
     public Task<VerbResult> ExecuteAsync(VerbContext context) {
+        // Prefer dobj, then iobj ("look at X"), then fall back to the room
+        var objectMatch = context.Command.HasDirectObject ? context.Command.DirectObject
+                        : context.Command.HasIndirectObject ? context.Command.IndirectObject
+                        : null;
+
         ObjectId? targetId;
 
-        if (!context.Command.HasDirectObject) {
-            var player = context.Objects.Get(context.PlayerId);
-            targetId = player?.LocationId;
+        if (objectMatch is not null) {
+            if (objectMatch.Kind == MatchResultKind.NotFound) {
+                context.Output.Notify(context.PlayerId, "You don't see that here.");
+                return Task.FromResult(VerbResult.Failure("Object not found."));
+            }
+            if (objectMatch.Kind == MatchResultKind.Ambiguous) {
+                context.Output.Notify(context.PlayerId, "I don't know which one you mean.");
+                return Task.FromResult(VerbResult.Failure("Ambiguous object."));
+            }
+            targetId = objectMatch.ObjectId;
         }
         else {
-            targetId = context.Command.DirectObject.Kind switch {
-                MatchResultKind.Found => context.Command.DirectObject.ObjectId,
-                MatchResultKind.NotFound => null,
-                MatchResultKind.Ambiguous => null,
-                _ => null
-            };
+            var player = context.Objects.Get(context.PlayerId);
+            targetId = player?.LocationId;
         } 
-
-        if (context.Command.HasDirectObject &&
-            context.Command.DirectObject.Kind == MatchResultKind.NotFound) {
-            context.Output.Notify(context.PlayerId, "You don't see that here.");
-            return Task.FromResult(VerbResult.Failure("Object not found."));
-        }
-
-        if (context.Command.HasDirectObject &&
-            context.Command.DirectObject.Kind == MatchResultKind.Ambiguous) {
-            context.Output.Notify(context.PlayerId, "I don't know which one you mean.");
-            return Task.FromResult(VerbResult.Failure("Ambiguous object."));
-        }
 
         if (targetId is null) {
             context.Output.Notify(context.PlayerId, "You are nowhere.");
@@ -52,16 +44,15 @@ public sealed class LookBuiltinVerb : IBuiltinVerb {
 
         context.Output.Notify(context.PlayerId, target.Name);
 
-        var description = target.Properties.TryGetValue("description", out var prop)
-            ? prop.Value.ToString()
-            : "You see nothing special.";
+        var description = context.Resolver.FindPropertyValue(target.Id, "description")?.ToString()
+            ?? "";
 
         context.Output.Notify(context.PlayerId, description);
 
         var allContents = context.Objects.ContentsOf(target.Id).ToList();
 
         var contents = allContents
-            .Where(obj => obj.Id != context.PlayerId && !IsExit(obj))
+            .Where(obj => obj.Id != context.PlayerId && !IsExit(context, obj))
             .ToList();
 
         if (contents.Count > 0) {
@@ -85,11 +76,11 @@ public sealed class LookBuiltinVerb : IBuiltinVerb {
         return Task.FromResult(VerbResult.Success());
     }
 
-    private static bool IsExit(MooObject obj)
-        => obj.Properties.ContainsKey("destination");
+    private static bool IsExit(VerbContext context, MooObject obj)
+        => context.Resolver.FindPropertyValue(obj.Id, "destination") is MooValue.Object;
 
     private static bool IsObviousExit(VerbContext context, MooObject obj)
-        => context.Resolver.FindPropertyValue(obj.Id, "destination") is MooValue.Object
+        => IsExit(context, obj)
         && context.Resolver.FindPropertyValue(obj.Id, "obvious") is MooValue.Integer i
-        && i.Value != 0; 
+        && i.Value != 0;
 }

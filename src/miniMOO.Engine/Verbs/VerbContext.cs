@@ -1,6 +1,6 @@
 ﻿using miniMOO.Engine.Services;
+using miniMOO.Core.Things;
 using miniMOO.Engine.Repositories;
-using miniMOO.Engine.Things;
 using miniMOO.Engine.Parser;
 
 namespace miniMOO.Engine.Verbs;

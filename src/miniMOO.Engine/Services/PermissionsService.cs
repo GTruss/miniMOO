@@ -1,5 +1,5 @@
 ﻿using miniMOO.Engine.Repositories;
-using miniMOO.Engine.Things;
+using miniMOO.Core.Things;
 
 namespace miniMOO.Engine.Services;
 

@@ -1,5 +1,5 @@
-﻿using miniMOO.Engine.Repositories;
-using miniMOO.Engine.Things;
+﻿using miniMOO.Core.Things;
+using miniMOO.Engine.Repositories;
 
 namespace miniMOO.Engine.Parser;
 

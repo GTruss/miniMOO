@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\miniMOO.Engine\miniMOO.Engine.csproj" />
+    <ProjectReference Include="..\miniMOO.Host\miniMOO.Host.csproj" />
   </ItemGroup>
 
 </Project>

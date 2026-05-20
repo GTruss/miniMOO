@@ -1,4 +1,4 @@
-﻿namespace miniMOO.Engine.Things;
+﻿namespace miniMOO.Core.Things;
 
 public readonly record struct ObjectId(int Value) {
     public static readonly ObjectId System = new(0);

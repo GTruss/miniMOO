@@ -1,13 +1,14 @@
-﻿using miniMOO.Engine.BuiltinVerbs;
+﻿using miniMOO.Core.Things;
+using miniMOO.Engine.BuiltinVerbs;
 using miniMOO.Engine.Parser;
+using miniMOO.Host.World;
 using miniMOO.Engine.Repositories;
 using miniMOO.Engine.ScriptRuntime;
 using miniMOO.Engine.Services;
 using miniMOO.Engine.Terminals;
-using miniMOO.Engine.Things;
-using miniMOO.Engine.World;
+using miniMOO.Script.Runtimes;
 
-namespace miniMOO.Engine;
+namespace miniMOO.Host;
 
 public class GameRunner {
     private IObjectRepository _objects = null!;
@@ -38,8 +39,9 @@ public class GameRunner {
         _parser = new CommandParser(matcher);
         _permissionService = new PermissionService(_objects);
         _resolver = new ObjectResolver(_objects);
+        var scriptWorld = new EngineScriptWorld(_objects, _resolver, _output);
         _dispatcher = new CommandDispatcher(_objects, _builtinRegistry, _output, 
-            _permissionService, new TinyScriptRuntime(), _resolver);
+            _permissionService, new TinyScriptRuntime(), scriptWorld, _resolver);
 
         _terminal.WriteLine("Welcome to miniMOO!");
 
@@ -81,5 +83,7 @@ public class GameRunner {
         _builtinRegistry = new BuiltinVerbRegistry();
         _builtinRegistry.Register(new LookBuiltinVerb());
         _builtinRegistry.Register(new GoBuiltinVerb());
+        _builtinRegistry.Register(new WaysBuiltinVerb());
+
     }
 }
