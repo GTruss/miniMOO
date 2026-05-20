@@ -8,18 +8,24 @@ using miniMOO.Engine.Verbs;
 namespace miniMOO.Engine.Parser;
 
 public sealed class CommandDispatcher {
+    private readonly record struct ResolvedVerb(ObjectId ThisId, MooVerb Verb);
+
     private readonly IObjectRepository _objects;
     private readonly BuiltinVerbRegistry _builtins;
     private readonly OutputService _output;
     private readonly PermissionService _permission;
     private readonly IScriptRuntime _scripts;
+    private readonly IObjectResolver _resolver;
 
     public CommandDispatcher(IObjectRepository objects, BuiltinVerbRegistry builtins, 
                              OutputService output, PermissionService permission, 
-                             IScriptRuntime scripts) {
+                             IScriptRuntime scripts, IObjectResolver resolver) {
         _objects = objects;
         _builtins = builtins;
         _output = output;
+        _permission = permission;
+        _scripts = scripts;
+        _resolver = resolver;
         _permission = permission;
         _scripts = scripts;
     }
@@ -52,7 +58,8 @@ public sealed class CommandDispatcher {
             Command = command,
             Objects = _objects,
             Output = _output,
-            Permissions = _permission
+            Permissions = _permission,
+            Resolver = _resolver
         };
 
         var result = verb.ImplementationKind switch {
@@ -70,17 +77,6 @@ public sealed class CommandDispatcher {
             _output.Notify(playerId, result.Message);
         }
 
-    }
-
-    private MooVerb? FindVerb(ObjectId startId, string name) {
-        for (var obj = _objects.Get(startId); obj is not null; obj = GetParent(obj)) {
-            var verb = obj.Verbs.FirstOrDefault(v => v.MatchesName(name));
-
-            if (verb is not null)
-                return verb;
-        }
-
-        return null;
     }
 
     private ResolvedVerb? FindCommandVerb(MooObject player, ParsedCommand command) {
@@ -111,14 +107,12 @@ public sealed class CommandDispatcher {
     }
 
     private bool TryFindVerbOn(ObjectId startId, string name, out MooVerb verb) {
-        for (var obj = _objects.Get(startId); obj is not null; obj = GetParent(obj)) {
-            var found = obj.Verbs.FirstOrDefault(v => v.MatchesName(name));
+        var found = _resolver.FindVerb(startId, name);
 
-            if (found is not null) {
-                verb = found;
-                return true;
-            }
-        }
+        if (found is not null) {
+            verb = found;
+            return true;
+        } 
 
         verb = null!;
         return false;
@@ -132,10 +126,5 @@ public sealed class CommandDispatcher {
 
         return builtin.ExecuteAsync(context).GetAwaiter().GetResult();
     }
-
-    private MooObject? GetParent(MooObject obj)
-        => obj.ParentId is { } parentId ? _objects.Get(parentId) : null;
-
-    private readonly record struct ResolvedVerb(ObjectId ThisId, MooVerb Verb);
 
 }

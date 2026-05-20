@@ -72,7 +72,7 @@ public sealed class LookBuiltinVerb : IBuiltinVerb {
         }
 
         var obviousExits = allContents
-            .Where(IsObviousExit)
+            .Where(obj => IsObviousExit(context, obj))
             .Select(e => e.Name)
             .ToList();
 
@@ -88,9 +88,8 @@ public sealed class LookBuiltinVerb : IBuiltinVerb {
     private static bool IsExit(MooObject obj)
         => obj.Properties.ContainsKey("destination");
 
-    private static bool IsObviousExit(MooObject obj)
-        => obj.Properties.ContainsKey("destination")
-        && obj.Properties.TryGetValue("obvious", out var v)
-        && v.Value is MooValue.Integer i
-        && i.Value != 0;
+    private static bool IsObviousExit(VerbContext context, MooObject obj)
+        => context.Resolver.FindPropertyValue(obj.Id, "destination") is MooValue.Object
+        && context.Resolver.FindPropertyValue(obj.Id, "obvious") is MooValue.Integer i
+        && i.Value != 0; 
 }

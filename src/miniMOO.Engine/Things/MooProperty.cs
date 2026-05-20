@@ -19,6 +19,9 @@ public abstract record MooValue {
     public sealed record Nothing : MooValue {
         public override string ToString() => "";
     }
+    public sealed record Clear : MooValue {
+        public override string ToString() => "";
+    }
 
     public sealed record Integer(long Value) : MooValue {
         public override string ToString() => Value.ToString();
@@ -42,4 +45,5 @@ public abstract record MooValue {
     }
 
     public static readonly MooValue NothingValue = new Nothing();
+    public static readonly MooValue ClearValue = new Clear();
 }

@@ -11,8 +11,11 @@ public sealed class GoBuiltinVerb : IBuiltinVerb {
         if (exit is null)
             return Fail(context, "That exit doesn't exist.");
 
-        if (!exit.Properties.TryGetValue("destination", out var destProp) ||
-            destProp.Value is not MooValue.Object destVal)
+        //if (!exit.Properties.TryGetValue("destination", out var destProp) ||
+        //    destProp.Value is not MooValue.Object destVal)
+        //    return Fail(context, "That exit leads nowhere.");
+
+        if (context.Resolver.FindPropertyValue(exit.Id, "destination") is not MooValue.Object destVal)
             return Fail(context, "That exit leads nowhere.");
 
         var player = context.Objects.Get(context.PlayerId);
@@ -27,9 +30,9 @@ public sealed class GoBuiltinVerb : IBuiltinVerb {
 
         context.Output.Notify(context.PlayerId, dest.Name);
 
-        var desc = dest.Properties.TryGetValue("description", out var dp)
-            ? dp.Value.ToString()
-            : "You see nothing special.";
+        var desc = context.Resolver.FindPropertyValue(dest.Id, "description")?.ToString()
+            ?? "You see nothing special.";
+
         context.Output.Notify(context.PlayerId, desc);
 
         var contents = context.Objects.ContentsOf(dest.Id)

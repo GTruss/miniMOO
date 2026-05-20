@@ -17,4 +17,5 @@ public sealed class VerbContext {
     public required IObjectRepository Objects { get; init; }
     public required PermissionService Permissions { get; init; }
     public required OutputService Output { get; init; }
+    public required IObjectResolver Resolver { get; init; }
 }

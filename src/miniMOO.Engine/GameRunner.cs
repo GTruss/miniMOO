@@ -11,6 +11,7 @@ namespace miniMOO.Engine;
 
 public class GameRunner {
     private IObjectRepository _objects = null!;
+    private IObjectResolver _resolver = null!;
     private BuiltinVerbRegistry _builtinRegistry = null!;
     private CommandParser _parser = null!;
     private CommandDispatcher _dispatcher = null!;
@@ -36,13 +37,14 @@ public class GameRunner {
         var matcher = new ObjectMatcher(_objects);
         _parser = new CommandParser(matcher);
         _permissionService = new PermissionService(_objects);
+        _resolver = new ObjectResolver(_objects);
         _dispatcher = new CommandDispatcher(_objects, _builtinRegistry, _output, 
-            _permissionService, new TinyScriptRuntime());
+            _permissionService, new TinyScriptRuntime(), _resolver);
 
         _terminal.WriteLine("Welcome to miniMOO!");
 
-        DescribeLocation();
-
+        DescribeLocation();       
+    
         while (true) {
             _terminal.Write("> ");
             var input = Console.ReadLine();
@@ -69,9 +71,8 @@ public class GameRunner {
 
         _output.Notify(_playerId, room.Name);
 
-        var desc = room.Properties.TryGetValue("description", out var prop)
-            ? prop.Value.ToString()
-            : "You see nothing special.";
+        var desc = _resolver.FindPropertyValue(room.Id, "description")?.ToString()
+            ?? "You see nothing special.";
 
         _output.Notify(_playerId, desc);
     }
