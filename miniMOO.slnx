@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/miniMOO.Cli/miniMOO.Cli.csproj" />
+  <Project Path="src/miniMOO.Engine/miniMOO.Engine.csproj" />
+</Solution>
