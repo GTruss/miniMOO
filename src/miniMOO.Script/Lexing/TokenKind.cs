@@ -11,10 +11,13 @@ public enum TokenKind {
     RightParen,
     LeftBrace,
     RightBrace,
+    LeftBracket,
+    RightBracket,
     Comma,
     Semicolon,
     Colon,
     Dot,
+    DollarIdentifier,  // $name — shorthand
 
     Plus,
     Minus,
@@ -42,5 +45,7 @@ public enum TokenKind {
     Return,
     For,
     In,
-    EndFor
+    EndFor,
+    While,
+    EndWhile
 }

@@ -21,6 +21,11 @@ public sealed class ObjectMatcher {
                 ? MatchResult.Found(explicitId)
                 : MatchResult.NotFound();
 
+        if (TryResolveSystemProperty(text, out var resolvedId))
+            return _objects.Exists(resolvedId)
+                ? MatchResult.Found(resolvedId)
+                : MatchResult.NotFound();
+
         var player = _objects.Get(playerId);
 
         if (player is null)
@@ -105,5 +110,19 @@ public sealed class ObjectMatcher {
 
         objectId = new ObjectId(value);
         return true;
+    }
+
+    private bool TryResolveSystemProperty(string text, out ObjectId objectId) {
+        objectId = default;
+        if (!text.StartsWith('$') || text.Length < 2)
+            return false;
+        var propName = text[1..];
+        var sysObj = _objects.Get(ObjectId.System);
+        if (sysObj?.Properties.TryGetValue(propName, out var prop) == true
+            && prop.Value is MooValue.Object obj) {
+            objectId = obj.Value;
+            return true;
+        }
+        return false;
     }
 }

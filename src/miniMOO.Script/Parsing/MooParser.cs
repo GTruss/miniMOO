@@ -27,6 +27,7 @@ public sealed class MooParser {
         if (Check(TokenKind.If)) return ParseIfStatement();
         if (Check(TokenKind.For)) return ParseForStatement();
         if (Check(TokenKind.Return)) return ParseReturnStatement();
+        if (Check(TokenKind.While)) return ParseWhileStatement();
 
         var expression = ParseExpression();
         Consume(TokenKind.Semicolon, "Expected ';' after expression.");
@@ -70,6 +71,15 @@ public sealed class MooParser {
         Consume(TokenKind.EndFor, "Expected 'endfor'.");
         return new ForStatementNode(variable.Text, iterable, body);
     }
+    private WhileStatementNode ParseWhileStatement() {
+        Consume(TokenKind.While, "Expected 'while'.");
+        Consume(TokenKind.LeftParen, "Expected '(' after 'while'.");
+        var condition = ParseExpression();
+        Consume(TokenKind.RightParen, "Expected ')' after condition.");
+        var body = ParseBlock();
+        Consume(TokenKind.EndWhile, "Expected 'endwhile'.");
+        return new WhileStatementNode(condition, body);
+    } 
 
     private ReturnStatementNode ParseReturnStatement() {
         Consume(TokenKind.Return, "Expected 'return'.");
@@ -96,6 +106,7 @@ public sealed class MooParser {
         || Check(TokenKind.Else)
         || Check(TokenKind.ElseIf)
         || Check(TokenKind.EndFor)
+        || Check(TokenKind.EndWhile)
         || Check(TokenKind.EndOfFile);
 
     // ── Expressions (precedence, lowest → highest) ─────────────────
@@ -107,14 +118,19 @@ public sealed class MooParser {
         if (Check(TokenKind.Identifier)) {
             var saved = _position;
             var name = Advance().Text;
-
             if (Match(TokenKind.Equal))
                 return new AssignmentExpressionNode(name, ParseAssignment());
-
-            _position = saved; // not an assignment — backtrack
+            _position = saved;
         }
 
-        return ParseOr();
+        var expr = ParseOr();
+
+        // Property assignment: obj.prop = value
+        if (expr is PropertyAccessExpressionNode propAccess && Match(TokenKind.Equal))
+            return new PropertyAssignmentExpressionNode(
+                propAccess.Target, propAccess.PropertyName, ParseAssignment());
+
+        return expr;
     }
 
     private ExpressionNode ParseOr() {
@@ -232,6 +248,12 @@ public sealed class MooParser {
                 continue;
             }
 
+            if (Match(TokenKind.LeftBracket)) {
+                var index = ParseExpression();
+                Consume(TokenKind.RightBracket, "Expected ']' after index.");
+                expression = new IndexExpressionNode(expression, index);
+                continue;
+            }
             break;
         }
 
@@ -269,6 +291,28 @@ public sealed class MooParser {
             var expression = ParseExpression();
             Consume(TokenKind.RightParen, "Expected ')' after expression.");
             return expression;
+        }
+
+        if (Match(TokenKind.LeftBrace)) {
+            var items = new List<ExpressionNode>();
+            if (!Check(TokenKind.RightBrace)) {
+                do {
+                    if (Match(TokenKind.At))
+                        items.Add(new SpliceExpressionNode(ParseExpression()));
+                    else
+                        items.Add(ParseExpression());
+                } while (Match(TokenKind.Comma));
+            }
+            Consume(TokenKind.RightBrace, "Expected '}' after list.");
+            return new ListLiteralExpressionNode(items);
+        }
+
+        if (Match(TokenKind.DollarIdentifier)) {
+            // $wiz desugars to #0.wiz at parse time — faithful to LambdaMOO
+            var name = (string)(Previous().Value ?? "");
+            return new PropertyAccessExpressionNode(
+                new ObjectLiteralExpressionNode(0L),
+                name);
         }
 
         throw Error(Current, "Expected expression.");

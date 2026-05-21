@@ -76,4 +76,20 @@ public sealed record ForStatementNode(
     IReadOnlyList<StatementNode> Body) : StatementNode;
 
 public sealed record ReturnStatementNode(
-    ExpressionNode? Value) : StatementNode; 
+    ExpressionNode? Value) : StatementNode;
+
+public sealed record WhileStatementNode(
+    ExpressionNode Condition,
+    IReadOnlyList<StatementNode> Body) : StatementNode;
+
+public sealed record IndexExpressionNode(
+    ExpressionNode Target,
+    ExpressionNode Index) : ExpressionNode;
+
+public sealed record ListLiteralExpressionNode(
+    IReadOnlyList<ExpressionNode> Items) : ExpressionNode;
+
+public sealed record PropertyAssignmentExpressionNode(
+    ExpressionNode Target,
+    string PropertyName,
+    ExpressionNode Value) : ExpressionNode;

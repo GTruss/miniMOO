@@ -91,4 +91,55 @@ public sealed class EngineScriptWorld : IScriptWorld {
 
         return await _scriptRuntime.ExecuteAsync(context, mooVerb.Implementation);
     }
+
+    public IReadOnlyList<ObjectId> GetChildren(ObjectId parentId) 
+        => _objects.All()
+            .Where(o => o.ParentId == parentId)
+            .Select(o => o.Id)
+            .ToList();
+
+    public ObjectId CreateObject(ObjectId parentId, ObjectId ownerId) {
+        var newId = _objects.AllocateId();
+        _objects.Add(new MooObject {
+            Id = newId,
+            OwnerId = ownerId,
+            ParentId = parentId,
+            LocationId = null,
+            Name = "object",
+            Flags = ObjectFlags.Readable
+        });
+        return newId;
+    }
+
+    public void MoveObject(ObjectId objId, ObjectId destId) {
+        var obj = _objects.Get(objId)
+            ?? throw new InvalidOperationException($"Object {objId} not found.");
+
+        obj.LocationId = destId;
+    }
+
+    public void SetObjectName(ObjectId objId, string name) {
+        var obj = _objects.Get(objId)
+            ?? throw new InvalidOperationException($"Object {objId} not found.");
+
+        obj.Name = name;
+    }
+
+    public void SetProperty(ObjectId objId, string propName, MooValue value) {
+        var obj = _objects.Get(objId)
+            ?? throw new InvalidOperationException($"Object {objId} not found.");
+
+        obj.Properties[propName] = new MooProperty {
+            Name = propName,
+            OwnerId = obj.OwnerId,
+            Value = value
+        };
+    }
+
+    public void AddAlias(ObjectId objId, string alias) {
+        var obj = _objects.Get(objId)
+            ?? throw new InvalidOperationException($"Object {objId} not found.");
+        if (!obj.Aliases.Contains(alias, StringComparer.OrdinalIgnoreCase))
+            obj.Aliases.Add(alias);
+    }
 }

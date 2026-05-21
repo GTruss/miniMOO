@@ -9,31 +9,44 @@ namespace miniMOO.Host.World;
 /// Builds the initial miniMOO world: prototype classes + a small navigable area.
 ///
 /// Object ID allocation:
-///   #0  - System (reserved)
+///   #0  - System      — reserved
 ///   #1  - $root       — base ancestor of all objects
-///   #2  - $room       — generic room prototype
-///   #3  - $exit       — generic exit prototype
-///   #4  - $thing      — generic pick-up-able object prototype
-///   #5  - $player     — generic player prototype
+///   #2  - Wizard      — the default player (parent: $wiz)
+///   #3  - $room       — generic room prototype (parent: $root)
+///   #4  - $builder    — generic builder prototype (parent: $player)
+///   #5  - $thing      — generic pick-up-able object prototype (parent: $root)
+///   #6  - $player     — generic player prototype (parent: $root)
+///   #7  - $exit       — generic exit prototype (parent: $root)
+///   #8  - $container  — generic container prototype (parent: $thing)
+///   #9  - $note       — generic note prototype (parent: $thing)
+///   #57 - $wiz        — generic wizard prototype (parent: $prog)
+///   #58 - $prog       — generic programmer prototype (parent: $builder)
 ///   #10 - The Void    — $player_start, where new players appear
 ///   #11 - The Foyer   — first real room
 ///   #12 - The Library — second room
 ///   #13 - exit: Foyer -> Library (east)
 ///   #14 - exit: Library -> Foyer (west)
 ///   #20 - a worn book (thing in the Library)
-///   #100- Wizard      — the default player
 ///   #101- a gnarled staff (in Wizard's inventory)
 /// </summary>
 public static class WorldSeeder {
-    public static readonly ObjectId RootId       = new(1);
-    public static readonly ObjectId GenRoomId    = new(2);
-    public static readonly ObjectId GenExitId    = new(3);
-    public static readonly ObjectId GenThingId   = new(4);
-    public static readonly ObjectId GenPlayerId  = new(5);
-    public static readonly ObjectId PlayerStartId = new(10);
-    public static readonly ObjectId FoyerId      = new(11);
-    public static readonly ObjectId LibraryId    = new(12);
-    public static readonly ObjectId WizardId     = new(100);
+    public static readonly ObjectId RootId = new(1);
+    public static readonly ObjectId WizardId = new(2);   
+    public static readonly ObjectId GenRoomId = new(3);   
+    public static readonly ObjectId GenBuilderId = new(4);   
+    public static readonly ObjectId GenThingId = new(5);   
+    public static readonly ObjectId GenPlayerId = new(6);   
+    public static readonly ObjectId GenExitId = new(7);   
+    public static readonly ObjectId GenContainerId = new(8);
+    public static readonly ObjectId GenNoteId      = new(9);
+    public static readonly ObjectId PlayerStartId  = new(10);
+    public static readonly ObjectId GenObjectUtilsId = new(52);
+    public static readonly ObjectId GenWizId       = new(57);
+    public static readonly ObjectId GenProgId      = new(58);
+
+    // Starter Rooms
+    public static readonly ObjectId FoyerId = new(101);  
+    public static readonly ObjectId LibraryId = new(102);
 
     public static IObjectRepository Seed() {
         var repo = new InMemoryObjectRepository();
@@ -50,8 +63,24 @@ public static class WorldSeeder {
     // -------------------------------------------------------------------------
 
     private static void AddPrototypes(InMemoryObjectRepository repo) {
+        // #0 — The System Object — all $name properties live here
+        var sysObj = Obj(ObjectId.System, ObjectId.System, null, null, "The System Object");
+        Prop(sysObj, "root", new MooValue.Object(RootId));
+        Prop(sysObj, "room", new MooValue.Object(GenRoomId));
+        Prop(sysObj, "builder", new MooValue.Object(GenBuilderId));
+        Prop(sysObj, "thing", new MooValue.Object(GenThingId));
+        Prop(sysObj, "player", new MooValue.Object(GenPlayerId));
+        Prop(sysObj, "exit", new MooValue.Object(GenExitId));
+        Prop(sysObj, "container", new MooValue.Object(GenContainerId));
+        Prop(sysObj, "note", new MooValue.Object(GenNoteId));
+        Prop(sysObj, "player_start", new MooValue.Object(PlayerStartId));
+        Prop(sysObj, "prog", new MooValue.Object(GenProgId));
+        Prop(sysObj, "wiz", new MooValue.Object(GenWizId));
+        Prop(sysObj, "object_utils", new MooValue.Object(GenObjectUtilsId));
+        repo.Add(sysObj);
+
         // $root — every object inherits from this
-        var root = Obj(RootId, "#0", null, null, "$root");
+        var root = Obj(RootId, ObjectId.System, null, null, "$root");
         root.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
         Prop(root, "description", "You see nothing special.");
         root.Verbs.Add(new MooVerb {
@@ -84,7 +113,7 @@ public static class WorldSeeder {
         repo.Add(root);
 
         // $room
-        var genRoom = Obj(GenRoomId, "#0", RootId, null, "$room");
+        var genRoom = Obj(GenRoomId, ObjectId.System, RootId, null, "$room");
         genRoom.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
         Prop(genRoom, "description", "An empty room.");
         genRoom.Verbs.Add(new MooVerb {
@@ -204,24 +233,262 @@ public static class WorldSeeder {
         repo.Add(genRoom);
 
         // $exit
-        var genExit = Obj(GenExitId, "#0", RootId, null, "$exit");
+        var genExit = Obj(GenExitId, ObjectId.System, RootId, null, "$exit");
         genExit.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
         Prop(genExit, "description", "You see an exit.");
         Prop(genExit, "obvious", new MooValue.Integer(1));
         repo.Add(genExit);
 
         // $thing
-        var genThing = Obj(GenThingId, "#0", RootId, null, "$thing");
+        var genThing = Obj(GenThingId, ObjectId.System, RootId, null, "$thing");
         genThing.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
         Prop(genThing, "description", "You see nothing special about it.");
         repo.Add(genThing);
 
         // $player
-        var genPlayer = Obj(GenPlayerId, "#0", RootId, null, "$player");
+        var genPlayer = Obj(GenPlayerId, ObjectId.System, RootId, null, "$player");
         genPlayer.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
         Prop(genPlayer, "description", "A nondescript person.");
         AddPlayerVerbs(genPlayer);
         repo.Add(genPlayer);
+
+        // $builder — inherits from $player; home of @create, @dig, etc.
+        var genBuilder = Obj(GenBuilderId, ObjectId.System, GenPlayerId, null, "$builder");
+        genBuilder.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+        genBuilder.Verbs.Add(new MooVerb {
+            Names = { "@create" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.Any,
+            Preposition = "any",
+            IndirectObject = VerbObjectSpec.Any,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                parent = dobj;
+                if (!valid(parent))
+                  player:tell("Usage: @create <parent> [named [name:]alias,alias,...]");
+                  return;
+                endif
+                newobj = create(parent);
+                move(newobj, player);
+                if (iobjstr != "")
+                  colon = index(iobjstr, ":");
+                  if (colon)
+                    display_name = substr(iobjstr, 1, colon - 1);
+                    alias_str = substr(iobjstr, colon + 1);
+                  else
+                    first_comma = index(iobjstr, ",");
+                    if (first_comma)
+                      display_name = substr(iobjstr, 1, first_comma - 1);
+                    else
+                      display_name = iobjstr;
+                    endif
+                    alias_str = iobjstr;
+                  endif 
+                  set_name(newobj, display_name);
+                  remainder = alias_str;
+                  done = 0;
+                  while (!done)
+                    comma = index(remainder, ",");
+                    if (comma)
+                      add_alias(newobj, substr(remainder, 1, comma - 1));
+                      remainder = substr(remainder, comma + 1);
+                    else
+                      add_alias(newobj, remainder);
+                      done = 1;
+                    endif
+                  endwhile
+                endif
+                player:tell("You now have ", newobj.name, " with object number ", newobj, " and parent ", parent.name, " (", parent, ").");
+            """
+        });
+
+        genBuilder.Verbs.Add(new MooVerb {
+            Names = { "@dig" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                if (argstr == "")
+                  player:tell("Usage: @dig <room name>");
+                  return;
+                endif
+                newroom = create($room);
+                set_name(newroom, argstr);
+                player:tell("You dig ", newroom.name, " (", newroom, ").");
+            """
+        });
+        repo.Add(genBuilder);
+
+        // $container — inherits from $thing; can hold other objects
+        var genContainer = Obj(GenContainerId, ObjectId.System, GenThingId, null, "$container");
+        genContainer.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+        Prop(genContainer, "description", "A container.");
+        repo.Add(genContainer);
+
+        // $note — inherits from $thing; can be read
+        var genNote = Obj(GenNoteId, ObjectId.System, GenThingId, null, "$note");
+        genNote.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+        Prop(genNote, "description", "A note.");
+        repo.Add(genNote);
+
+        // $prog — inherits from $builder; home of @parents, @examine, @list, etc.
+        // $prog — inherits from $builder; home of @parents, @examine, @list, etc.
+        var genProg = Obj(GenProgId, ObjectId.System, GenBuilderId, null, "$prog");
+        genProg.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+        genProg.Verbs.Add(new MooVerb {
+            Names = { "@parents" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.Any,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                obj = dobj;
+                if (!valid(obj))
+                    player:tell("Usage: @parents <object>");
+                    return;
+                endif
+                player:tell(tostr(obj.name, " (", obj, ")"));
+                while (valid(obj = parent(obj)))
+                    player:tell("  ", obj.name, " (", obj, ")");
+                endwhile
+            """
+        });
+        repo.Add(genProg);
+
+        // $wiz — inherits from $prog; home of wizard-only commands
+        var genWiz = Obj(GenWizId, ObjectId.System, GenProgId, null, "$wiz");
+        genWiz.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+        repo.Add(genWiz);
+
+        // $object_utils (#52) — inheritance and location hierarchy utilities
+        var genObjectUtils = Obj(GenObjectUtilsId, ObjectId.System, null, null, "$object_utils");
+        genObjectUtils.Flags = ObjectFlags.Readable;
+
+        genObjectUtils.Verbs.Add(new MooVerb {
+            Names = { "ancestors" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                ret = {};
+                for o in (args)
+                  what = o;
+                  while (valid(what = parent(what)))
+                    ret = setadd(ret, what);
+                  endwhile
+                endfor
+                return ret;
+            """
+        });
+
+        genObjectUtils.Verbs.Add(new MooVerb {
+            Names = { "isa" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                what = args[1];
+                targ = args[2];
+                while (valid(what))
+                  if (what == targ)
+                    return 1;
+                  endif
+                  what = parent(what);
+                endwhile
+                return 0;
+            """
+        });
+
+        genObjectUtils.Verbs.Add(new MooVerb {
+            Names = { "contains" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                loc = args[1];
+                what = args[2];
+                while (valid(what))
+                  what = what.location;
+                  if (what == loc)
+                    return 1;
+                  endif
+                endwhile
+                return 0;
+            """
+        });
+
+        genObjectUtils.Verbs.Add(new MooVerb {
+            Names = { "locations" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                ret = {};
+                what = args[1];
+                while (valid(what = what.location))
+                  ret = {@ret, what};
+                endwhile
+                return ret;
+            """
+        });
+
+        genObjectUtils.Verbs.Add(new MooVerb {
+            Names = { "descendants", "descendents" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                r = children(args[1]);
+                i = 1;
+                while (i <= length(r))
+                  kids = children(r[i]);
+                  if (kids)
+                    r = {@r, @kids};
+                  endif
+                  i = i + 1;
+                endwhile
+                return r;
+            """
+        });
+
+        genObjectUtils.Verbs.Add(new MooVerb {
+            Names = { "isoneof" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                what = args[1];
+                targ = args[2];
+                while (valid(what))
+                  i = 1;
+                  while (i <= length(targ))
+                    if (what == targ[i])
+                      return 1;
+                    endif
+                    i = i + 1;
+                  endwhile
+                  what = parent(what);
+                endwhile
+                return 0;
+            """
+        });
+
+        repo.Add(genObjectUtils);
     }
 
     // -------------------------------------------------------------------------
@@ -230,39 +497,39 @@ public static class WorldSeeder {
 
     private static void AddWorld(InMemoryObjectRepository repo) {
         // The Void — $player_start, where players land before being placed
-        var theVoid = Obj(PlayerStartId, "#0", GenRoomId, null, "The Void");
+        var theVoid = Obj(PlayerStartId, ObjectId.System, GenRoomId, null, "The Void");
         Prop(theVoid, "description",
             "A featureless expanse. You feel like you haven't quite arrived yet.");
         repo.Add(theVoid);
 
         // The Foyer
-        var foyer = Obj(FoyerId, "#0", GenRoomId, null, "The Foyer");
+        var foyer = Obj(FoyerId, ObjectId.System, GenRoomId, null, "The Foyer");
         Prop(foyer, "description",
             "A modest entry hall. Pale light filters through frosted glass. " +
             "A corridor leads east toward the library.");
         repo.Add(foyer);
 
         // The Library
-        var library = Obj(LibraryId, "#0", GenRoomId, null, "The Library");
+        var library = Obj(LibraryId, ObjectId.System, GenRoomId, null, "The Library");
         Prop(library, "description",
             "Tall shelves line the walls, filled with dusty volumes. " +
             "The foyer lies to the west.");
         repo.Add(library);
 
         // Exit: Foyer -> Library (east)
-        var exitEast = Exit(new ObjectId(13), FoyerId, LibraryId, "east", "e");
+        var exitEast = Exit(new ObjectId(104), FoyerId, LibraryId, "east", "e");
         Prop(exitEast, "description",
             "The world shimmers around you.");
         repo.Add(exitEast);
 
         // Exit: Library -> Foyer (west)
-        var exitWest = Exit(new ObjectId(14), LibraryId, FoyerId, "west", "w");
+        var exitWest = Exit(new ObjectId(105), LibraryId, FoyerId, "west", "w");
         Prop(exitWest, "description",
             "The world shimmers around you.");
         repo.Add(exitWest);
 
         // A worn book sitting in the library
-        var book = Obj(new ObjectId(20), "#0", GenThingId, LibraryId, "a worn book");
+        var book = Obj(new ObjectId(106), ObjectId.System, GenThingId, LibraryId, "a worn book");
         book.Aliases.Add("book");
         book.Aliases.Add("worn book");
         Prop(book, "description",
@@ -276,13 +543,13 @@ public static class WorldSeeder {
     // -------------------------------------------------------------------------
 
     private static void AddPlayer(InMemoryObjectRepository repo) {
-        var wizard = Obj(WizardId, "#100", GenPlayerId, FoyerId, "Wizard");
+        var wizard = Obj(WizardId, WizardId, GenWizId, FoyerId, "Wizard");
         wizard.Flags = ObjectFlags.User | ObjectFlags.Programmer | ObjectFlags.Wizard;
         Prop(wizard, "description", "The all-powerful wizard of miniMOO.");
         Prop(wizard, "debug", new MooValue.Integer(0));
         repo.Add(wizard);
 
-        var staff = Obj(new ObjectId(101), "#100", GenThingId, WizardId, "a gnarled staff");
+        var staff = Obj(new ObjectId(103), WizardId, GenThingId, WizardId, "a gnarled staff");
         staff.Aliases.Add("staff");
         staff.Aliases.Add("gnarled staff");
         Prop(staff, "description", "A twisted length of dark wood, warm to the touch.");
@@ -332,10 +599,7 @@ public static class WorldSeeder {
     // Factory helpers
     // -------------------------------------------------------------------------
 
-    private static MooObject Obj(ObjectId id, string ownerStr, ObjectId? parentId, ObjectId? locationId, string name) {
-
-        var ownerId = ownerStr == "#0" ? ObjectId.System : id;
-
+    private static MooObject Obj(ObjectId id, ObjectId ownerId, ObjectId? parentId, ObjectId? locationId, string name) {
         return new MooObject {
             Id = id,
             OwnerId = ownerId,
@@ -348,7 +612,7 @@ public static class WorldSeeder {
 
     private static MooObject Exit(ObjectId id, ObjectId sourceId, ObjectId destId, string primaryName, string alias) {
 
-        var exit = Obj(id, "#0", GenExitId, sourceId, primaryName);
+        var exit = Obj(id, ObjectId.System, GenExitId, sourceId, primaryName);
         exit.Aliases.Add(alias);
 
         Prop(exit, "source", new MooValue.Object(sourceId));

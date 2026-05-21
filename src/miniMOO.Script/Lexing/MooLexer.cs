@@ -43,11 +43,14 @@ public sealed class MooLexer {
             ')' => Make(TokenKind.RightParen, start, line, column),
             '{' => Make(TokenKind.LeftBrace, start, line, column),
             '}' => Make(TokenKind.RightBrace, start, line, column),
+            '[' => Make(TokenKind.LeftBracket, start, line, column),
+            ']' => Make(TokenKind.RightBracket, start, line, column),
             ',' => Make(TokenKind.Comma, start, line, column),
             ';' => Make(TokenKind.Semicolon, start, line, column),
             ':' => Make(TokenKind.Colon, start, line, column),
             '.' => Make(TokenKind.Dot, start, line, column),
             '@' => Make(TokenKind.At, start, line, column),
+            '$' => ReadDollarIdentifier(start, line, column),
 
             '&' => Match('&')
                 ? Make(TokenKind.AmpAmp, start, line, column)
@@ -207,6 +210,19 @@ public sealed class MooLexer {
             $"Unterminated string at line {line}, column {column}.");
     }
 
+    private Token ReadDollarIdentifier(int start, int line, int column) {
+        if (IsAtEnd() || !IsIdentifierStart(Current))
+            throw new MooLexException($"Expected identifier after '$' at line {line}, column {column}.");
+
+        while (!IsAtEnd() && IsIdentifierPart(Current))
+            Advance(); 
+
+        var text = _source[start.._position];
+
+        // Value carries the name without the '$' (e.g. "wiz" for "$wiz")
+        return new Token(TokenKind.DollarIdentifier, text, text[1..], start, line, column);
+    }
+
     private Token Make(TokenKind kind, int start, int line, int column)
         => new(kind, _source[start.._position], null, start, line, column);
 
@@ -226,6 +242,8 @@ public sealed class MooLexer {
             "for" => TokenKind.For,
             "in" => TokenKind.In,
             "endfor" => TokenKind.EndFor,
+            "while" => TokenKind.While,
+            "endwhile" => TokenKind.EndWhile,
             _ => TokenKind.Identifier
         };
 }

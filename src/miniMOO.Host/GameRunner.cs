@@ -85,7 +85,6 @@ public class GameRunner {
 
     private void RegisterVerbs() {
         _builtinRegistry = new BuiltinVerbRegistry();
-        _builtinRegistry.Register(new LookBuiltinVerb());
         _builtinRegistry.Register(new GoBuiltinVerb());
         _builtinRegistry.Register(new WaysBuiltinVerb());
 

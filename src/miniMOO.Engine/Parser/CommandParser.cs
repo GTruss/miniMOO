@@ -13,7 +13,9 @@ public sealed class CommandParser {
         "with",
         "using",
         "into",
-        "through"
+        "through",
+        "named",
+        "called"
     ];
 
     private readonly ObjectMatcher _matcher;
