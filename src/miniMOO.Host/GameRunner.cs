@@ -36,12 +36,16 @@ public class GameRunner {
         _objects = WorldSeeder.Seed();
 
         var matcher = new ObjectMatcher(_objects);
+        var scriptRuntime = new TinyScriptRuntime();
+
         _parser = new CommandParser(matcher);
         _permissionService = new PermissionService(_objects);
         _resolver = new ObjectResolver(_objects);
-        var scriptWorld = new EngineScriptWorld(_objects, _resolver, _output);
+
+        var scriptWorld = new EngineScriptWorld(_objects, _resolver, _output, scriptRuntime);
+
         _dispatcher = new CommandDispatcher(_objects, _builtinRegistry, _output, 
-            _permissionService, new TinyScriptRuntime(), scriptWorld, _resolver);
+            _permissionService, scriptRuntime, scriptWorld, _resolver);
 
         _terminal.WriteLine("Welcome to miniMOO!");
 

@@ -132,18 +132,16 @@ public sealed class CommandDispatcher {
         return builtin.ExecuteAsync(context).GetAwaiter().GetResult();
     }
 
-    private VerbResult ExecuteScript(
-        ObjectId playerId,
-        ObjectId thisId,
-        ParsedCommand command,
-        MooVerb verb) {
+    private VerbResult ExecuteScript(ObjectId playerId, ObjectId thisId, ParsedCommand command, MooVerb verb) {
 
         var scriptContext = new ScriptContext {
             PlayerId = playerId,
             ThisId = thisId,
             Verb = command.Verb,
             ArgStr = command.ArgumentText,
-            Args = command.Arguments,
+            Args = command.Arguments
+                .Select(arg => (MooValue)new MooValue.String(arg))
+                .ToList(),
             DirectObjectId = command.DirectObject?.ObjectId,
             IndirectObjectId = command.IndirectObject?.ObjectId,
             World = _scriptWorld

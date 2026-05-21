@@ -1,6 +1,8 @@
 using miniMOO.Core.Things;
 using miniMOO.Engine.Repositories;
 
+using System.Numerics;
+
 namespace miniMOO.Host.World;
 
 /// <summary>
@@ -52,12 +54,71 @@ public static class WorldSeeder {
         var root = Obj(RootId, "#0", null, null, "$root");
         root.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
         Prop(root, "description", "You see nothing special.");
+        root.Verbs.Add(new MooVerb {
+            Names = { "tell" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.This,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.This,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                notify(this, tostr(@args));
+            """
+        });
         repo.Add(root);
 
         // $room
         var genRoom = Obj(GenRoomId, "#0", RootId, null, "$room");
         genRoom.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
         Prop(genRoom, "description", "An empty room.");
+        genRoom.Verbs.Add(new MooVerb {
+            Names = { "announce" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                notify(player, tostr(@args));
+            """
+        });
+
+        genRoom.Verbs.Add(new MooVerb {
+            Names = { "say", "\"" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.Any,
+            Preposition = "any",
+            IndirectObject = VerbObjectSpec.Any,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                player:tell("You say, \"", argstr, "\"");
+                this:announce(player.name, " says, \"", argstr, "\"");
+            """
+        });
+
+        genRoom.Verbs.Add(new MooVerb {
+            Names = { "emote", ":" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.Any,
+            Preposition = "any",
+            IndirectObject = VerbObjectSpec.Any,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                this:announce(player.name, " ", argstr);
+            """
+        });
+
+        genRoom.Verbs.Add(new MooVerb {
+            Names = { "emote_nospace", "::" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.Any,
+            Preposition = "any",
+            IndirectObject = VerbObjectSpec.Any,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                this:announce(player.name, argstr);
+            """
+        });
         repo.Add(genRoom);
 
         // $exit
@@ -175,43 +236,6 @@ public static class WorldSeeder {
             ImplementationKind = VerbImplementationKind.Builtin,
             Implementation = "ways"
         });
-
-        player.Verbs.Add(new MooVerb {
-            Names = { "say", "\"" },
-            OwnerId = ObjectId.System,
-            DirectObject = VerbObjectSpec.Any,
-            IndirectObject = VerbObjectSpec.None,
-            ImplementationKind = VerbImplementationKind.Script,
-            Implementation = """
-                tell player You say, "{argstr}"
-                announce room {player} says, "{argstr}"
-                """
-        });
-
-        player.Verbs.Add(new MooVerb {
-            Names = { "emote", ":" },
-            OwnerId = ObjectId.System,
-            DirectObject = VerbObjectSpec.Any,
-            IndirectObject = VerbObjectSpec.None,
-            ImplementationKind = VerbImplementationKind.Script,
-            Implementation = """
-                tell player {player} {argstr}
-                announce room {player} {argstr}
-                """
-        });
-
-        player.Verbs.Add(new MooVerb {
-            Names = { "emote_nospace", "::" },
-            OwnerId = ObjectId.System,
-            DirectObject = VerbObjectSpec.Any,
-            IndirectObject = VerbObjectSpec.None,
-            ImplementationKind = VerbImplementationKind.Script,
-            Implementation = """
-                tell player {player}{argstr}
-                announce room {player}{argstr}
-                """
-        });
-
         player.Verbs.Add(new MooVerb {
             Names = { "wave" },
             OwnerId = ObjectId.System,
@@ -219,9 +243,9 @@ public static class WorldSeeder {
             IndirectObject = VerbObjectSpec.None,
             ImplementationKind = VerbImplementationKind.Script,
             Implementation = """
-                tell player You wave.
-                announce room {player} waves.
-                """
+                player:tell("You wave.");
+                player.location:announce(player.name, " waves.");
+            """
         });
 
         player.Verbs.Add(new MooVerb {
