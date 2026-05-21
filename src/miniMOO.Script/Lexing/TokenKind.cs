@@ -32,6 +32,8 @@ public enum TokenKind {
     GreaterEqual,
 
     At,
+    AmpAmp,
+    PipePipe,
 
     If, 
     Else,

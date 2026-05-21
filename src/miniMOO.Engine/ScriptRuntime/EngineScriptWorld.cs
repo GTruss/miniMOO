@@ -63,14 +63,11 @@ public sealed class EngineScriptWorld : IScriptWorld {
         return Task.CompletedTask;
     }
 
-    public async Task<ScriptResult> InvokeVerbAsync(ScriptContext callerContext, ObjectId thisId, 
-                                              string verb, IReadOnlyList<MooValue> args) {
-        var target = _objects.Get(thisId);
+    public async Task<ScriptResult> InvokeVerbAsync(ScriptContext callerContext, ObjectId thisId,
+        string verb, IReadOnlyList<MooValue> args, ObjectId? searchFromId = null) {
 
-        if (target is null)
-            return ScriptResult.Failure($"Invalid object: {thisId}");
-
-        var mooVerb = _resolver.FindVerb(thisId, verb);
+        var searchId = searchFromId ?? thisId;
+        var (mooVerb, definingId) = _resolver.FindVerbWithOwner(searchId, verb);
 
         if (mooVerb is null)
             return ScriptResult.Failure($"Verb not found: {thisId}:{verb}");
@@ -86,6 +83,9 @@ public sealed class EngineScriptWorld : IScriptWorld {
             Args = args,
             DirectObjectId = callerContext.DirectObjectId,
             IndirectObjectId = callerContext.IndirectObjectId,
+            DobjStr = callerContext.DobjStr,
+            IobjStr = callerContext.IobjStr,
+            DefiningObjectId = definingId,
             World = this
         };
 

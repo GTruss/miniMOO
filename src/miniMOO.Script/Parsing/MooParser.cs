@@ -21,15 +21,197 @@ public sealed class MooParser {
         return new ProgramNode(statements);
     }
 
+    // ── Statements ────────────────────────────────────────────────
+
     private StatementNode ParseStatement() {
+        if (Check(TokenKind.If)) return ParseIfStatement();
+        if (Check(TokenKind.For)) return ParseForStatement();
+        if (Check(TokenKind.Return)) return ParseReturnStatement();
+
         var expression = ParseExpression();
         Consume(TokenKind.Semicolon, "Expected ';' after expression.");
-
         return new ExpressionStatementNode(expression);
     }
 
+    private IfStatementNode ParseIfStatement() {
+        Consume(TokenKind.If, "Expected 'if'.");
+        Consume(TokenKind.LeftParen, "Expected '(' after 'if'.");
+        var condition = ParseExpression();
+        Consume(TokenKind.RightParen, "Expected ')' after condition.");
+
+        var branches = new List<IfBranchNode> {
+            new(condition, ParseBlock())
+        };
+
+        while (Check(TokenKind.ElseIf)) {
+            Advance();
+            Consume(TokenKind.LeftParen, "Expected '(' after 'elseif'.");
+            var elseifCondition = ParseExpression();
+            Consume(TokenKind.RightParen, "Expected ')' after condition.");
+            branches.Add(new(elseifCondition, ParseBlock()));
+        }
+
+        IReadOnlyList<StatementNode>? elseBranch = null;
+        if (Match(TokenKind.Else))
+            elseBranch = ParseBlock();
+
+        Consume(TokenKind.EndIf, "Expected 'endif'.");
+        return new IfStatementNode(branches, elseBranch);
+    }
+
+    private ForStatementNode ParseForStatement() {
+        Consume(TokenKind.For, "Expected 'for'.");
+        var variable = Consume(TokenKind.Identifier, "Expected variable name after 'for'.");
+        Consume(TokenKind.In, "Expected 'in' after variable name.");
+        Consume(TokenKind.LeftParen, "Expected '(' after 'in'.");
+        var iterable = ParseExpression();
+        Consume(TokenKind.RightParen, "Expected ')' after iterable.");
+        var body = ParseBlock();
+        Consume(TokenKind.EndFor, "Expected 'endfor'.");
+        return new ForStatementNode(variable.Text, iterable, body);
+    }
+
+    private ReturnStatementNode ParseReturnStatement() {
+        Consume(TokenKind.Return, "Expected 'return'.");
+
+        if (Match(TokenKind.Semicolon))
+            return new ReturnStatementNode(null);
+
+        var value = ParseExpression();
+        Consume(TokenKind.Semicolon, "Expected ';' after return value.");
+        return new ReturnStatementNode(value);
+    }
+
+    private IReadOnlyList<StatementNode> ParseBlock() {
+        var statements = new List<StatementNode>();
+
+        while (!IsBlockTerminator())
+            statements.Add(ParseStatement());
+
+        return statements;
+    }
+
+    private bool IsBlockTerminator()
+        => Check(TokenKind.EndIf)
+        || Check(TokenKind.Else)
+        || Check(TokenKind.ElseIf)
+        || Check(TokenKind.EndFor)
+        || Check(TokenKind.EndOfFile);
+
+    // ── Expressions (precedence, lowest → highest) ─────────────────
+
     private ExpressionNode ParseExpression()
-        => ParsePostfix();
+        => ParseAssignment();
+
+    private ExpressionNode ParseAssignment() {
+        if (Check(TokenKind.Identifier)) {
+            var saved = _position;
+            var name = Advance().Text;
+
+            if (Match(TokenKind.Equal))
+                return new AssignmentExpressionNode(name, ParseAssignment());
+
+            _position = saved; // not an assignment — backtrack
+        }
+
+        return ParseOr();
+    }
+
+    private ExpressionNode ParseOr() {
+        var left = ParseAnd();
+
+        while (Match(TokenKind.PipePipe))
+            left = new BinaryExpressionNode(left, BinaryOp.Or, ParseAnd());
+
+        return left;
+    }
+
+    private ExpressionNode ParseAnd() {
+        var left = ParseEquality();
+
+        while (Match(TokenKind.AmpAmp))
+            left = new BinaryExpressionNode(left, BinaryOp.And, ParseEquality());
+
+        return left;
+    }
+
+    private ExpressionNode ParseEquality() {
+        var left = ParseComparison();
+
+        while (true) {
+            if (Match(TokenKind.EqualEqual))
+                left = new BinaryExpressionNode(left, BinaryOp.Equal, ParseComparison());
+            else if (Match(TokenKind.BangEqual))
+                left = new BinaryExpressionNode(left, BinaryOp.NotEqual, ParseComparison());
+            else
+                break;
+        }
+
+        return left;
+    }
+
+    private ExpressionNode ParseComparison() {
+        var left = ParseAdditive();
+
+        while (true) {
+            if (Match(TokenKind.Less))
+                left = new BinaryExpressionNode(left, BinaryOp.Less, ParseAdditive());
+            else if (Match(TokenKind.LessEqual))
+                left = new BinaryExpressionNode(left, BinaryOp.LessEqual, ParseAdditive());
+            else if (Match(TokenKind.Greater))
+                left = new BinaryExpressionNode(left, BinaryOp.Greater, ParseAdditive());
+            else if (Match(TokenKind.GreaterEqual))
+                left = new BinaryExpressionNode(left, BinaryOp.GreaterEqual, ParseAdditive());
+            else
+                break;
+        }
+
+        return left;
+    }
+
+    private ExpressionNode ParseAdditive() {
+        var left = ParseMultiplicative();
+
+        while (true) {
+            if (Match(TokenKind.Plus))
+                left = new BinaryExpressionNode(left, BinaryOp.Add, ParseMultiplicative());
+            else if (Match(TokenKind.Minus))
+                left = new BinaryExpressionNode(left, BinaryOp.Subtract, ParseMultiplicative());
+            else
+                break;
+        }
+
+        return left;
+    }
+
+    private ExpressionNode ParseMultiplicative() {
+        var left = ParseUnary();
+
+        while (true) {
+            if (Match(TokenKind.Star))
+                left = new BinaryExpressionNode(left, BinaryOp.Multiply, ParseUnary());
+            else if (Match(TokenKind.Slash))
+                left = new BinaryExpressionNode(left, BinaryOp.Divide, ParseUnary());
+            else if (Match(TokenKind.Percent))
+                left = new BinaryExpressionNode(left, BinaryOp.Modulo, ParseUnary());
+            else
+                break;
+        }
+
+        return left;
+    }
+
+    private ExpressionNode ParseUnary() {
+        if (Match(TokenKind.Bang))
+            return new UnaryExpressionNode(UnaryOp.Not, ParseUnary());
+
+        if (Match(TokenKind.Minus))
+            return new UnaryExpressionNode(UnaryOp.Negate, ParseUnary());
+
+        return ParsePostfix();
+    }
+
+    // ── Postfix & Primary (unchanged logic) ───────────────────────
 
     private ExpressionNode ParsePostfix() {
         var expression = ParsePrimary();
@@ -44,9 +226,7 @@ public sealed class MooParser {
             if (Match(TokenKind.Colon)) {
                 var verb = Consume(TokenKind.Identifier, "Expected verb name after ':'.");
                 Consume(TokenKind.LeftParen, "Expected '(' after verb name.");
-
                 var arguments = ParseArguments();
-
                 Consume(TokenKind.RightParen, "Expected ')' after verb arguments.");
                 expression = new VerbCallExpressionNode(expression, verb.Text, arguments);
                 continue;
@@ -70,7 +250,6 @@ public sealed class MooParser {
             if (Match(TokenKind.LeftParen)) {
                 var arguments = ParseArguments();
                 Consume(TokenKind.RightParen, "Expected ')' after function arguments.");
-
                 return new FunctionCallExpressionNode(identifier.Text, arguments);
             }
 
@@ -109,18 +288,16 @@ public sealed class MooParser {
         return arguments;
     }
 
-    private bool Match(TokenKind kind) {
-        if (!Check(kind))
-            return false;
+    // ── Helpers (unchanged) ───────────────────────────────────────
 
+    private bool Match(TokenKind kind) {
+        if (!Check(kind)) return false;
         Advance();
         return true;
     }
 
     private Token Consume(TokenKind kind, string message) {
-        if (Check(kind))
-            return Advance();
-
+        if (Check(kind)) return Advance();
         throw Error(Current, message);
     }
 
@@ -130,7 +307,6 @@ public sealed class MooParser {
     private Token Advance() {
         if (!Check(TokenKind.EndOfFile))
             _position++;
-
         return Previous();
     }
 

@@ -48,6 +48,17 @@ public sealed class MooLexer {
             ':' => Make(TokenKind.Colon, start, line, column),
             '.' => Make(TokenKind.Dot, start, line, column),
             '@' => Make(TokenKind.At, start, line, column),
+
+            '&' => Match('&')
+                ? Make(TokenKind.AmpAmp, start, line, column)
+                : throw new MooLexException(
+                    $"Unexpected character '&' at line {line}, column {column}. Did you mean '&&'?"),
+
+            '|' => Match('|')
+                ? Make(TokenKind.PipePipe, start, line, column)
+                : throw new MooLexException(
+                    $"Unexpected character '|' at line {line}, column {column}. Did you mean '||'?"),
+
             '+' => Make(TokenKind.Plus, start, line, column),
             '-' => Make(TokenKind.Minus, start, line, column),
             '*' => Make(TokenKind.Star, start, line, column),

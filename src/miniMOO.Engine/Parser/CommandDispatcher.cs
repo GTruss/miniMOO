@@ -144,6 +144,8 @@ public sealed class CommandDispatcher {
                 .ToList(),
             DirectObjectId = command.DirectObject?.ObjectId,
             IndirectObjectId = command.IndirectObject?.ObjectId,
+            DobjStr = command.DirectObjectText ?? "",
+            IobjStr = command.IndirectObjectText ?? "",
             World = _scriptWorld
         };
 

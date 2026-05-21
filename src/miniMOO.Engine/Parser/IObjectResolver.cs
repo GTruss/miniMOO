@@ -8,6 +8,7 @@ public interface IObjectResolver {
     IEnumerable<MooObject> SelfAndAncestors(ObjectId id);
 
     MooVerb? FindVerb(ObjectId startId, string name);
+    (MooVerb? Verb, ObjectId? DefinedOn) FindVerbWithOwner(ObjectId startId, string name);
     MooProperty? FindProperty(ObjectId startId, string name);
     MooValue? FindPropertyValue(ObjectId startId, string name);
     bool HasProperty(ObjectId startId, string name);

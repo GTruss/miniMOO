@@ -65,6 +65,22 @@ public static class WorldSeeder {
                 notify(this, tostr(@args));
             """
         });
+        root.Verbs.Add(new MooVerb {
+            Names = { "look_self" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                desc = this.description;
+                if (desc)
+                  player:tell(desc);
+                else
+                  player:tell("You see nothing special.");
+                endif
+            """
+        });
         repo.Add(root);
 
         // $room
@@ -118,6 +134,72 @@ public static class WorldSeeder {
             Implementation = """
                 this:announce(player.name, argstr);
             """
+        });
+        genRoom.Verbs.Add(new MooVerb {
+            Names = { "look_self" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                player:tell(this.name);
+                pass();
+                this:tell_contents();
+            """
+        });
+
+        genRoom.Verbs.Add(new MooVerb {
+            Names = { "tell_contents" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = """
+                shown = 0;
+                for obj in (this.contents)
+                  if (obj != player && !obj.obvious)
+                    if (!shown)
+                      player:tell("You see");
+                      shown = 1;
+                    endif
+                    player:tell("  ", obj.name);
+                  endif
+                endfor
+            """
+        });
+
+        var lookScript = """
+            if (dobjstr == "" && iobjstr == "")
+              this:look_self();
+            elseif (valid(dobj))
+              dobj:look_self();
+            elseif (valid(iobj))
+              iobj:look_self();
+            else
+              player:tell("You don't see that here.");
+            endif
+        """;
+
+        genRoom.Verbs.Add(new MooVerb {
+            Names = { "look", "l" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.Any,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = lookScript
+        });
+
+        genRoom.Verbs.Add(new MooVerb {
+            Names = { "look", "l" },
+            OwnerId = ObjectId.System,
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "at",
+            IndirectObject = VerbObjectSpec.Any,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = lookScript
         });
         repo.Add(genRoom);
 
@@ -197,6 +279,7 @@ public static class WorldSeeder {
         var wizard = Obj(WizardId, "#100", GenPlayerId, FoyerId, "Wizard");
         wizard.Flags = ObjectFlags.User | ObjectFlags.Programmer | ObjectFlags.Wizard;
         Prop(wizard, "description", "The all-powerful wizard of miniMOO.");
+        Prop(wizard, "debug", new MooValue.Integer(0));
         repo.Add(wizard);
 
         var staff = Obj(new ObjectId(101), "#100", GenThingId, WizardId, "a gnarled staff");
@@ -211,23 +294,6 @@ public static class WorldSeeder {
     // -------------------------------------------------------------------------
 
     private static void AddPlayerVerbs(MooObject player) {
-        player.Verbs.Add(new MooVerb {
-            Names = { "look", "l" },
-            OwnerId = ObjectId.System,
-            DirectObject = VerbObjectSpec.Any,
-            IndirectObject = VerbObjectSpec.None,
-            ImplementationKind = VerbImplementationKind.Builtin,
-            Implementation = "look"
-        });
-
-        player.Verbs.Add(new MooVerb {
-            Names = { "look", "l" },
-            DirectObject = VerbObjectSpec.None,
-            Preposition = "at",
-            IndirectObject = VerbObjectSpec.Any,
-            Implementation = "look"   // same builtin
-        });
-
         player.Verbs.Add(new MooVerb {
             Names = { "@ways" },
             OwnerId = ObjectId.System,
@@ -255,8 +321,10 @@ public static class WorldSeeder {
             IndirectObject = VerbObjectSpec.None,
             ImplementationKind = VerbImplementationKind.Script,
             Implementation = """
-                list inventory
-                """
+                for obj in (player.contents)
+                  player:tell(obj.name);
+                endfor
+            """
         });
     }
 

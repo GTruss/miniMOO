@@ -67,12 +67,6 @@ public sealed class LookBuiltinVerb : IBuiltinVerb {
             .Select(e => e.Name)
             .ToList();
 
-        if (obviousExits.Count > 0) {
-            context.Output.Notify(context.PlayerId, "");
-            context.Output.Notify(context.PlayerId,
-                "Obvious exits: " + string.Join(", ", obviousExits));
-        }
-
         return Task.FromResult(VerbResult.Success());
     }
 

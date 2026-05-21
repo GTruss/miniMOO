@@ -11,7 +11,9 @@ public sealed class ScriptContext {
     public required IReadOnlyList<MooValue> Args { get; init; }
 
     public ObjectId? DirectObjectId { get; init; }
+    public string DobjStr { get; init; } = "";
     public ObjectId? IndirectObjectId { get; init; }
-
+    public string IobjStr { get; init; } = "";
     public required IScriptWorld World { get; init; }
+    public ObjectId? DefiningObjectId { get; init; }  // which ancestor defined the running verb
 }

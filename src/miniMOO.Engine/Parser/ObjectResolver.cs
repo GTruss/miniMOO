@@ -26,6 +26,15 @@ public sealed class ObjectResolver : IObjectResolver {
             .SelectMany(obj => obj.Verbs)
             .FirstOrDefault(verb => verb.MatchesName(name));
 
+    public (MooVerb? Verb, ObjectId? DefinedOn) FindVerbWithOwner(ObjectId startId, string name) {
+        foreach (var obj in SelfAndAncestors(startId)) {
+            var verb = obj.Verbs.FirstOrDefault(v => v.MatchesName(name));
+            if (verb is not null)
+                return (verb, obj.Id);
+        }
+        return (null, null);
+    }
+
     public MooProperty? FindProperty(ObjectId startId, string name) {
         foreach (var obj in SelfAndAncestors(startId)) {
             if (!obj.Properties.TryGetValue(name, out var prop))
