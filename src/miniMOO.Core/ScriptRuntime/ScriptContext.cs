@@ -16,4 +16,5 @@ public sealed class ScriptContext {
     public string IobjStr { get; init; } = "";
     public required IScriptWorld World { get; init; }
     public ObjectId? DefiningObjectId { get; init; }  // which ancestor defined the running verb
+    public ScriptExecutionMeter Meter { get; init; } = new();
 }

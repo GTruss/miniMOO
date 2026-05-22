@@ -1,5 +1,6 @@
 using miniMOO.Core.ScriptRuntime;
 using miniMOO.Core.Things;
+using miniMOO.Script.Ast;
 using miniMOO.Script.Evaluation;
 using miniMOO.Script.Lexing;
 using miniMOO.Script.Parsing;
@@ -7,16 +8,22 @@ using miniMOO.Script.Parsing;
 namespace miniMOO.Script.Runtimes;
 
 public sealed class TinyScriptRuntime : IScriptRuntime {
+    private readonly Dictionary<string, ProgramNode> _cache = new();
+
     public async Task<ScriptResult> ExecuteAsync(ScriptContext context, string script) {
         try {
+
             if (IsDebugEnabled(context)) {
                 await context.World.NotifyAsync(
                     context.PlayerId,
                     [new MooValue.String(LexerDebug.Dump(script))]);
             }
 
-            var tokens = new MooLexer(script).Lex();
-            var program = new MooParser(tokens).ParseProgram();
+            if (!_cache.TryGetValue(script, out var program)) {
+                var tokens = new MooLexer(script).Lex();
+                program = new MooParser(tokens).ParseProgram();
+                _cache[script] = program;
+            }
 
             return await new MooEvaluator(context).ExecuteAsync(program);
         }
@@ -27,6 +34,9 @@ public sealed class TinyScriptRuntime : IScriptRuntime {
             return ScriptResult.Failure(ex.Message);
         }
         catch (MooEvaluationException ex) {
+            return ScriptResult.Failure(ex.Message);
+        }
+        catch (MooScriptException ex) {
             return ScriptResult.Failure(ex.Message);
         }
     } 

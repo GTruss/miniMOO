@@ -44,6 +44,8 @@ public static partial class WorldSeeder {
         var genRoom = Obj(WorldIds.Room, ObjectId.System, WorldIds.Root, null, "$room");
         genRoom.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
         Prop(genRoom, "description", "An empty room.");
+        Prop(genRoom, "exits", new MooValue.List([]));
+        Prop(genRoom, "entrances", new MooValue.List([]));
 
         genRoom.Verbs.Add(ScriptVerb(["announce"], """
             notify(player, tostr(@args));
@@ -98,6 +100,38 @@ public static partial class WorldSeeder {
 
         genRoom.Verbs.Add(ScriptVerb(["look", "l"], lookScript,
             VerbObjectSpec.None, "at", VerbObjectSpec.Any));
+
+        genRoom.Verbs.Add(ScriptVerb(["obvious_exits", "obvious_entrances"], """
+            exits = {};
+            for exit in (this.exits)
+                if (exit.obvious)
+                    exits = setadd(exits, exit);
+                endif
+            endfor
+            return exits;        
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genRoom.Verbs.Add(ScriptVerb(["match_exit"], """
+            ":match_exit(name) => exit | $failed_match | $ambiguous_match";
+            "Matches NAME against this.exits by exit.name and exit.aliases.";
+            player:tell("Matching ", args[1], " against exits: ", $string_utils:english_list(this.exits));
+            what = args[1];
+            if (what)
+              yes = $failed_match;
+              for e in (this.exits)
+                if (valid(e) && what in {e.name, @e.aliases})
+                  if (yes == $failed_match)
+                    yes = e;
+                  elseif (yes != e)
+                    return $ambiguous_match;
+                  endif
+                endif
+              endfor
+              return yes;
+            else
+              return $nothing;
+            endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         repo.Add(genRoom);
     }
@@ -193,6 +227,7 @@ public static partial class WorldSeeder {
     private static void AddProgrammer(InMemoryObjectRepository repo) {
         var genProg = Obj(WorldIds.Prog, ObjectId.System, WorldIds.Builder, null, "$prog");
         genProg.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+        Prop(genProg, "programmer", 1);
 
         genProg.Verbs.Add(ScriptVerb(["@parents"], """
             obj = dobj;
@@ -205,6 +240,47 @@ public static partial class WorldSeeder {
                 player:tell("  ", obj.name, " (", obj, ")");
             endwhile
         """, VerbObjectSpec.Any));
+
+        genProg.Verbs.Add(ScriptVerb(["eval_cmd_string"], """
+            program = args[1];
+            program = program + ";";
+
+
+            if (!match(program, "^ *%(;%|%(if%|fork?%|return%|while%|try%)[^a-z0-9A-Z_]%)"))
+              program = "return " + program;
+            endif
+
+            start_ticks = ticks_left();
+            start_seconds = seconds_left();
+
+            value = eval(program);
+
+            ticks = start_ticks - ticks_left();
+            seconds = start_seconds - seconds_left();
+
+            return {1, value, ticks, seconds};
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genProg.Verbs.Add(ScriptVerb(["eval", "eval-d", ";"], """
+            if (player != this)
+              player:tell("I don't understand that.");
+              return;
+            elseif (!player.programmer)
+              player:tell("You need to be a programmer to eval code.");
+              return;
+            endif
+
+            result = player:eval_cmd_string(argstr, verb != "eval-d");
+
+            if (result[1])
+              player:tell(tostr(result[2]));
+            else
+              player:tell(result[2]);
+            endif
+
+            player:tell("[used ", result[3], " ticks, ", result[4], " seconds.]");
+
+        """, VerbObjectSpec.Any, "any", VerbObjectSpec.Any));
 
         repo.Add(genProg);
     }
@@ -224,6 +300,84 @@ public static partial class WorldSeeder {
     private static void AddFrandsPlayerClass(InMemoryObjectRepository repo) {
         var genFrandsPlayerClass = Obj(WorldIds.FrandsPlayerClass, ObjectId.System, WorldIds.MailPlayer, null, "Frand's player class");
         genFrandsPlayerClass.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+
+        genFrandsPlayerClass.Verbs.Add(ScriptVerb(["tell_ways"], """
+            ":tell_ways (<list of exits>)' - Tell yourself a list of exits, for @ways. You can override it to print the exits in any format.";
+            exits = args[1];
+            answer = {};
+            for e in (exits)
+              answer = {@answer, e.name + " (" + $string_utils:english_list(e.aliases) + ")"};
+            endfor
+            player:tell("Obvious exits: ", $string_utils:english_list(answer), ".");
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genFrandsPlayerClass.Verbs.Add(ScriptVerb(["obvious_exits"], """
+            "'obvious_exits()' - Return a list of common exit names which are obviously worth looking for in a room.";
+            return {"n", "ne", "e", "se", "s", "sw", "w", "nw", "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest", "u", "d", "up", "down", "out", "exit", "leave", "enter"};       
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genFrandsPlayerClass.Verbs.Add(ScriptVerb(["findexits"], """
+            "Add to the 'exits' list any exits in the room which have a single-letter alias.";
+            {room, exits} = args;
+            alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+            for i in [1..length(alphabet)]
+              found = room:match_exit(alphabet[i]);
+              if (valid(found) && !(found in exits))
+                exits = {@exits, found};
+              endif
+            endfor
+
+            return exits;        
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genFrandsPlayerClass.Verbs.Add(ScriptVerb(["checkexits"], """
+            "Check a list of exits to see if any of them are in the given room.";
+            {to_check, room, exits} = args;
+            for word in (to_check)
+              found = room:match_exit(word);
+              if (valid(found) && !(found in exits))
+                exits = {@exits, found};
+              endif
+            endfor
+            return exits;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genFrandsPlayerClass.Verbs.Add(ScriptVerb(["@ways"], """
+            "'@ways', '@ways <room>' - List any obvious exits from the given room (or this room, if none is given).";
+            if (dobjstr)
+              room = dobj;
+            else
+              room = this.location;
+            endif
+
+            if (!valid(room) || !($room in $object_utils:ancestors(room)))
+              player:tell("You can only pry into the exits of a room.");
+              return;
+            endif
+
+            exits = {};
+
+            if ($object_utils:has_verb(room, "obvious_exits"))
+              exits = room:obvious_exits();
+            endif
+
+            exits = this:checkexits(this:obvious_exits(), room, exits);
+            exits = this:findexits(room, exits);
+            this:tell_ways(exits);
+        
+        """, VerbObjectSpec.Any, "none", VerbObjectSpec.None));
+
+        genFrandsPlayerClass.Verbs.Add(ScriptVerb(["@ways_old"], """
+            
+            for obj in (here.contents)
+              if (valid(obj.destination))
+                player:tell("Obvious exits: ", obj.name, " leads to ", obj.destination.name, " (", obj.destination, ").");
+              endif
+            endfor
+            this:tell_ways(here.contents, here);
+        """, VerbObjectSpec.Any, "none", VerbObjectSpec.None));
+
+
         repo.Add(genFrandsPlayerClass);
     }
 }

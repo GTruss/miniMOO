@@ -88,7 +88,8 @@ public sealed class EngineScriptWorld : IScriptWorld {
             DobjStr = callerContext.DobjStr,
             IobjStr = callerContext.IobjStr,
             DefiningObjectId = definingId,
-            World = this
+            World = this,
+            Meter = callerContext.Meter,
         };
 
         return await _scriptRuntime.ExecuteAsync(context, mooVerb.Implementation);

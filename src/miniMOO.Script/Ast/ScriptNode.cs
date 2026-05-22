@@ -100,8 +100,13 @@ public sealed record RangeForStatementNode(
     ExpressionNode To,
     IReadOnlyList<StatementNode> Body) : StatementNode;
 
+public sealed record DestructuringSlotNode(
+    string Name,
+    bool IsOptional,
+    ExpressionNode? DefaultValue) : ScriptNode;
+
 public sealed record DestructuringAssignmentNode(
-    IReadOnlyList<string> Variables,
+    IReadOnlyList<DestructuringSlotNode> Slots,
     ExpressionNode Value) : ExpressionNode;
 
 public sealed record TryStatementNode(

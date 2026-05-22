@@ -39,6 +39,28 @@ public static partial class WorldSeeder {
             return result;
         """));
 
+
+        su.Verbs.Add(ScriptVerb(["english_list"], """
+            {things, ?nothingstr = "nothing", ?andstr = " and ", ?commastr = ", ", ?finalcommastr = ","} = args;
+            nthings = length(things);
+            if (nthings == 0)
+              return nothingstr;
+            elseif (nthings == 1)
+              return tostr(things[1]);
+            elseif (nthings == 2)
+              return tostr(things[1], andstr, things[2]);
+            else
+              ret = "";
+              for k in [1..nthings - 1]
+                if (k == nthings - 1)
+                  commastr = finalcommastr;
+                endif
+                ret = tostr(ret, things[k], commastr);
+              endfor
+              return tostr(ret, andstr, things[nthings]);
+            endif
+        """));
+
         repo.Add(su);
     }
 
@@ -87,13 +109,19 @@ public static partial class WorldSeeder {
             spec   = args[1];
             source = args[2];
             dest   = args[3];
+
             exit_obj = create($exit);
             this:set_names(exit_obj, spec);
             exit_obj.source = source;
             exit_obj.destination = dest;
+
             move(exit_obj, source);
+
+            source.exits = setadd(source.exits, exit_obj);
+            dest.entrances = setadd(dest.entrances, exit_obj);
             verb_names = spec;
             colon = index(verb_names, ":");
+
             if (colon)
               verb_names = substr(verb_names, 1, colon - 1) + "," + substr(verb_names, colon + 1);
             endif
@@ -120,7 +148,7 @@ public static partial class WorldSeeder {
               endwhile
             endfor
             return ret;
-        """));
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         genObjectUtils.Verbs.Add(ScriptVerb(["isa"], """
             what = args[1];
@@ -132,7 +160,7 @@ public static partial class WorldSeeder {
               what = parent(what);
             endwhile
             return 0;
-        """));
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         genObjectUtils.Verbs.Add(ScriptVerb(["contains"], """
             loc = args[1];
@@ -153,7 +181,7 @@ public static partial class WorldSeeder {
               ret = {@ret, what};
             endwhile
             return ret;
-        """));
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         genObjectUtils.Verbs.Add(ScriptVerb(["descendants", "descendents"], """
             r = children(args[1]);
@@ -166,7 +194,7 @@ public static partial class WorldSeeder {
               i = i + 1;
             endwhile
             return r;
-        """));
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         genObjectUtils.Verbs.Add(ScriptVerb(["isoneof"], """
             what = args[1];
@@ -182,7 +210,40 @@ public static partial class WorldSeeder {
               what = parent(what);
             endwhile
             return 0;
-        """));
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genObjectUtils.Verbs.Add(ScriptVerb(["isoneof"], """
+            what = args[1];
+            targ = args[2];
+            while (valid(what))
+              i = 1;
+              while (i <= length(targ))
+                if (what == targ[i])
+                  return 1;
+                endif
+                i = i + 1;
+              endwhile
+              what = parent(what);
+            endwhile
+            return 0;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genObjectUtils.Verbs.Add(ScriptVerb(["has_verb"], """
+            ":has_verb(OBJ object, STR verbname)";
+            "Find out if an object has a verb matching the given verbname.";
+            "Returns {location} if so, 0 if not, where location is the object or the ancestor on which the verb is actually defined.";
+            {object, verbname} = args;
+            while (valid(object))
+              try
+                if (verb_info(object, verbname))
+                  return {object};
+                endif
+              except (E_VERBNF)
+                object = parent(object);
+              endtry
+            endwhile
+            return 0;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         repo.Add(genObjectUtils);
     }

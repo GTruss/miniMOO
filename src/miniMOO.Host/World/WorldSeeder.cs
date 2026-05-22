@@ -60,6 +60,7 @@ public static partial class WorldSeeder {
         AddUtilityObjects(repo);
         AddStarterWorld(repo);
         AddStarterPlayer(repo);
+        AddUnitTests(repo);
 
         return repo;
     }

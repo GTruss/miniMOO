@@ -93,6 +93,7 @@ public sealed class MooLexer {
 
             '`' => Make(TokenKind.Backtick, start, line, column),
             '\'' => Make(TokenKind.Apostrophe, start, line, column),
+            '?' => Make(TokenKind.Question, start, line, column),
 
             _ when IsIdentifierStart(ch) =>
                 ReadIdentifier(start, line, column),

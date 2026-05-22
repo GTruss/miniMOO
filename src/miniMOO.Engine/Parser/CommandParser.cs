@@ -91,7 +91,7 @@ public sealed class CommandParser {
             return "emote " + input[1..];
 
         if (input.StartsWith(";"))
-            return "eval " + input[1..];
+            return "eval ;" + input[1..];
 
         return input;
     }

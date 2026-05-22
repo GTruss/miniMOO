@@ -1,6 +1,11 @@
 ﻿using miniMOO.Core.ScriptRuntime;
 using miniMOO.Core.Things;
 using miniMOO.Script.Ast;
+using miniMOO.Script.Lexing;
+using miniMOO.Script.Parsing;
+
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace miniMOO.Script.Evaluation;
 
@@ -38,6 +43,8 @@ public sealed class MooEvaluator {
     // ── Statements ────────────────────────────────────────────────
 
     private async Task<MooValue?> ExecuteStatementAsync(StatementNode statement) {
+        Tick();
+
         switch (statement) {
             case ExpressionStatementNode expr:
                 return await EvaluateExpressionAsync(expr.Expression);
@@ -172,6 +179,8 @@ public sealed class MooEvaluator {
     // ── Expressions ───────────────────────────────────────────────
 
     private async Task<MooValue?> EvaluateExpressionAsync(ExpressionNode expression) {
+        Tick();
+
         switch (expression) {
             case AssignmentExpressionNode assignment: {
                     var value = await EvaluateExpressionAsync(assignment.Value);
@@ -252,10 +261,9 @@ public sealed class MooEvaluator {
 
         return binary.Op switch {
             BinaryOp.Add => Add(leftVal, rightVal),
-            BinaryOp.Subtract => ArithInt(leftVal, rightVal, (a, b) => a - b, "subtract"),
-            BinaryOp.Multiply => ArithInt(leftVal, rightVal, (a, b) => a * b, "multiply"),
-            BinaryOp.Divide => ArithInt(leftVal, rightVal, (a, b) =>
-                b == 0 ? throw new MooEvaluationException("Division by zero.") : a / b, "divide"),
+            BinaryOp.Subtract => ArithNumeric(leftVal, rightVal, (a, b) => a - b, (a, b) => a - b, "subtract"),
+            BinaryOp.Multiply => ArithNumeric(leftVal, rightVal, (a, b) => a * b, (a, b) => a * b, "multiply"),
+            BinaryOp.Divide => DivideNumeric(leftVal, rightVal),
             BinaryOp.Modulo => ArithInt(leftVal, rightVal, (a, b) =>
                 b == 0 ? throw new MooEvaluationException("Modulo by zero.") : a % b, "modulo"),
 
@@ -378,9 +386,16 @@ public sealed class MooEvaluator {
         if (value is not MooValue.List list)
             throw new MooEvaluationException("Destructuring requires a list on the right side.");
 
-        for (var i = 0; i < destruct.Variables.Count; i++) {
-            _locals[destruct.Variables[i]] = i < list.Items.Count
-                ? list.Items[i]
+        for (var i = 0; i < destruct.Slots.Count; i++) {
+            var slot = destruct.Slots[i];
+
+            if (i < list.Items.Count) {
+                _locals[slot.Name] = list.Items[i];
+                continue;
+            }
+
+            _locals[slot.Name] = slot.DefaultValue is not null
+                ? await EvaluateExpressionAsync(slot.DefaultValue) ?? MooValue.NothingValue
                 : MooValue.NothingValue;
         }
 
@@ -472,6 +487,7 @@ public sealed class MooEvaluator {
             "notify" => await NotifyAsync(args),
             "tostr" => new MooValue.String(string.Concat(args.Select(MooToString))),
             "str" => new MooValue.String(args.Count > 0 ? MooToString(args[0]) : ""),
+            "eval" => await EvalAsync(args),
             "valid" => Valid(args),
             "length" => Length(args),
             "typeof" => TypeOf(args),
@@ -487,6 +503,9 @@ public sealed class MooEvaluator {
             "add_alias" => AddAlias(args),
             "add_verb" => AddVerbBuiltin(args),
             "verb_info" => VerbInfo(args),
+            "match" => Match(args),
+            "ticks_left" => TicksLeft(args),
+            "seconds_left" => SecondsLeft(args),
             _ => throw new MooEvaluationException($"Unknown function: {functionCall.FunctionName}")
         };
     }
@@ -519,6 +538,30 @@ public sealed class MooEvaluator {
     }
 
     // ── Helpers ───────────────────────────────────────────────────
+
+    private async Task<MooValue> EvalAsync(IReadOnlyList<MooValue> args) {
+        if (args.Count == 0 || args[0] is not MooValue.String source)
+            throw new MooEvaluationException("eval() requires a string argument.");
+
+        try {
+            var tokens = new MooLexer(source.Value).Lex();
+            var program = new MooParser(tokens).ParseProgram();
+
+            var evaluator = new MooEvaluator(_context);
+            var result = await evaluator.ExecuteAsync(program);
+
+            if (!result.IsSuccess)
+                throw new MooEvaluationException(result.Error ?? "eval() failed.");
+
+            return result.Value ?? MooValue.NothingValue;
+        }
+        catch (MooLexException ex) {
+            throw new MooEvaluationException($"eval() lex error: {ex.Message}");
+        }
+        catch (MooParseException ex) {
+            throw new MooEvaluationException($"eval() parse error: {ex.Message}");
+        }
+    }
 
     private static MooValue Valid(IReadOnlyList<MooValue> args) {
         if (args.Count == 0 || args[0] is not MooValue.Object obj)
@@ -665,6 +708,62 @@ public sealed class MooEvaluator {
             ?? throw new MooScriptException(MooErrorCode.E_VERBNF, $"Verb not found: {name.Value}");
     }
 
+    private static MooValue Match(IReadOnlyList<MooValue> args) {
+        if (args.Count < 2 ||
+            args[0] is not MooValue.String subject ||
+            args[1] is not MooValue.String pattern)
+            throw new MooEvaluationException("match() requires two string arguments.");
+
+        var caseMatters = args.Count >= 3 && IsTruthy(args[2]);
+        var dotnetPattern = ConvertMooRegex(pattern.Value);
+
+        var options = caseMatters
+            ? RegexOptions.None
+            : RegexOptions.IgnoreCase;
+
+        Match match;
+
+        try {
+            match = Regex.Match(subject.Value, dotnetPattern, options);
+        }
+        catch (ArgumentException ex) {
+            throw new MooEvaluationException($"match() invalid pattern: {ex.Message}");
+        }
+
+        if (!match.Success)
+            return new MooValue.List([]);
+
+        var replacements = new List<MooValue>();
+
+        for (var i = 1; i <= 9; i++) {
+            if (i < match.Groups.Count && match.Groups[i].Success) {
+                replacements.Add(new MooValue.List([
+                    new MooValue.Integer(match.Groups[i].Index + 1),
+                new MooValue.Integer(match.Groups[i].Index + match.Groups[i].Length)
+                ]));
+            }
+            else {
+                replacements.Add(new MooValue.List([
+                    new MooValue.Integer(0),
+                new MooValue.Integer(-1)
+                ]));
+            }
+        }
+
+        return new MooValue.List([
+            new MooValue.Integer(match.Index + 1),
+        new MooValue.Integer(match.Index + match.Length),
+        new MooValue.List(replacements),
+        subject
+        ]);
+    }
+
+    private MooValue TicksLeft(IReadOnlyList<MooValue> args)
+    => new MooValue.Integer(_context.Meter.TicksLeft);
+
+    private MooValue SecondsLeft(IReadOnlyList<MooValue> args)
+        => new MooValue.Float(_context.Meter.SecondsLeft);
+
     private static MooValue Add(MooValue left, MooValue right) => (left, right) switch {
         (MooValue.Integer l, MooValue.Integer r) => new MooValue.Integer(l.Value + r.Value),
         (MooValue.String l, MooValue.String r) => new MooValue.String(l.Value + r.Value),
@@ -682,6 +781,55 @@ public sealed class MooEvaluator {
                 $"Cannot {opName} {left.GetType().Name} and {right.GetType().Name}.");
 
         return new MooValue.Integer(op(l.Value, r.Value));
+    }
+
+    private static MooValue ArithNumeric(MooValue left, MooValue right, Func<long, long, long> intOp, 
+        Func<double, double, double> floatOp,
+        string opName) {    
+
+        if (left is MooValue.Integer li && right is MooValue.Integer ri)
+            return new MooValue.Integer(intOp(li.Value, ri.Value));
+
+        if (TryDouble(left, out var ld) && TryDouble(right, out var rd))
+            return new MooValue.Float(floatOp(ld, rd));
+
+        throw new MooEvaluationException(
+            $"Cannot {opName} {left.GetType().Name} and {right.GetType().Name}.");
+    }
+
+    private static MooValue DivideNumeric(MooValue left, MooValue right) {
+        if (left is MooValue.Integer li && right is MooValue.Integer ri) {
+            if (ri.Value == 0)
+                throw new MooEvaluationException("Division by zero.");
+
+            return new MooValue.Integer(li.Value / ri.Value);
+        }
+
+        if (TryDouble(left, out var ld) && TryDouble(right, out var rd)) {
+            if (rd == 0)
+                throw new MooEvaluationException("Division by zero.");
+
+            return new MooValue.Float(ld / rd);
+        }
+
+        throw new MooEvaluationException(
+            $"Cannot divide {left.GetType().Name} and {right.GetType().Name}.");
+    }
+
+    private static bool TryDouble(MooValue value, out double result) {
+        switch (value) {
+            case MooValue.Integer i:
+                result = i.Value;
+                return true;
+
+            case MooValue.Float f:
+                result = f.Value;
+                return true;
+
+            default:
+                result = 0;
+                return false;
+        }
     }
 
     private static MooValue Compare(MooValue left, MooValue right, Func<long, long, bool> intOp) {
@@ -734,7 +882,44 @@ public sealed class MooEvaluator {
         MooValue.String s => s.Value,
         MooValue.Object o => $"#{o.Value.Value}",
         MooValue.List l => "{" + string.Join(", ", l.Items.Select(MooToString)) + "}",
-        MooValue.Float f => f.Value.ToString("G"),
+        MooValue.Float f => f.Value.ToString("0.####"),
         _ => ""
     };
+
+    private static string ConvertMooRegex(string pattern) {
+        var result = new StringBuilder();
+
+        for (var i = 0; i < pattern.Length; i++) {
+            var ch = pattern[i];
+
+            if (ch != '%') {
+                result.Append(ch);
+                continue;
+            }
+
+            if (i + 1 >= pattern.Length) {
+                result.Append('%');
+                continue;
+            }
+
+            var next = pattern[++i];
+
+            result.Append(next switch {
+                '(' => '(',
+                ')' => ')',
+                '|' => '|',
+                '%' => "%",
+                'w' => @"\w",
+                'W' => @"\W",
+                _ => Regex.Escape(next.ToString())
+            });
+        }
+
+        return result.ToString();
+    }
+
+    private void Tick() {
+        if (!_context.Meter.TryTick(out var error))
+            throw new MooScriptException(MooErrorCode.E_QUOTA, error ?? "Task quota exceeded.");
+    }
 }

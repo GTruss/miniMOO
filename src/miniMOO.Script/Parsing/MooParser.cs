@@ -14,8 +14,12 @@ public sealed class MooParser {
     public ProgramNode ParseProgram() {
         var statements = new List<StatementNode>();
 
-        while (!Check(TokenKind.EndOfFile))
+        while (!Check(TokenKind.EndOfFile)) {
+            if (Match(TokenKind.Semicolon))
+                continue;
+
             statements.Add(ParseStatement());
+        }
 
         Consume(TokenKind.EndOfFile, "Expected end of file.");
         return new ProgramNode(statements);
@@ -145,8 +149,12 @@ public sealed class MooParser {
     private IReadOnlyList<StatementNode> ParseBlock() {
         var statements = new List<StatementNode>();
 
-        while (!IsBlockTerminator())
+        while (!IsBlockTerminator()) {
+            if (Match(TokenKind.Semicolon))
+                continue;
+
             statements.Add(ParseStatement());
+        }
 
         return statements;
     }
@@ -157,6 +165,8 @@ public sealed class MooParser {
         || Check(TokenKind.ElseIf)
         || Check(TokenKind.EndFor)
         || Check(TokenKind.EndWhile)
+        || Check(TokenKind.Except)
+        || Check(TokenKind.EndTry)
         || Check(TokenKind.EndOfFile);
 
     // ── Expressions (precedence, lowest → highest) ─────────────────
@@ -173,18 +183,14 @@ public sealed class MooParser {
             _position = saved;
         }
 
-        var expr = ParseOr();
-
-        if (expr is ListLiteralExpressionNode listLit && Match(TokenKind.Equal)) {
-            var variables = new List<string>();
-            foreach (var item in listLit.Items) {
-                if (item is IdentifierExpressionNode id)
-                    variables.Add(id.Name);
-                else
-                    throw new MooParseException(Current, "Destructuring target must be a simple variable name.");
-            }
-            return new DestructuringAssignmentNode(variables, ParseAssignment());
+        if (LooksLikeDestructuringAssignment()) {
+            var saved = _position;
+            if (TryParseDestructuringAssignment(out var destructuring))
+                return destructuring;
+            _position = saved;
         }
+
+        var expr = ParseOr();
 
         // Property assignment: obj.prop = value
         if (expr is PropertyAccessExpressionNode propAccess && Match(TokenKind.Equal))
@@ -192,6 +198,48 @@ public sealed class MooParser {
                 propAccess.Target, propAccess.PropertyName, ParseAssignment());
 
         return expr;
+    }
+
+    private bool LooksLikeDestructuringAssignment()
+        => Check(TokenKind.LeftBrace)
+        && _position + 1 < _tokens.Count
+        && (_tokens[_position + 1].Kind == TokenKind.Identifier
+            || _tokens[_position + 1].Kind == TokenKind.Question);
+
+    private bool TryParseDestructuringAssignment(out DestructuringAssignmentNode destructuring) {
+        destructuring = null!;
+
+        var slots = ParseDestructuringSlots();
+        if (!Match(TokenKind.Equal))
+            return false;
+
+        destructuring = new DestructuringAssignmentNode(slots, ParseAssignment());
+        return true;
+    }
+
+    private IReadOnlyList<DestructuringSlotNode> ParseDestructuringSlots() {
+        var slots = new List<DestructuringSlotNode>();
+
+        Consume(TokenKind.LeftBrace, "Expected '{' to begin destructuring assignment.");
+
+        if (!Check(TokenKind.RightBrace)) {
+            do {
+                var isOptional = Match(TokenKind.Question);
+                var name = Consume(TokenKind.Identifier, "Expected variable name in destructuring assignment.");
+                ExpressionNode? defaultValue = null;
+
+                if (Match(TokenKind.Equal))
+                    defaultValue = ParseExpression();
+
+                if (!isOptional && defaultValue is not null)
+                    throw new MooParseException(name, "Only optional destructuring slots can have defaults.");
+
+                slots.Add(new DestructuringSlotNode(name.Text, isOptional, defaultValue));
+            } while (Match(TokenKind.Comma));
+        }
+
+        Consume(TokenKind.RightBrace, "Expected '}' after destructuring assignment.");
+        return slots;
     }
 
     private ExpressionNode ParseOr() {
@@ -304,11 +352,11 @@ public sealed class MooParser {
             }
 
             if (Match(TokenKind.Colon)) {
-                var verb = Consume(TokenKind.Identifier, "Expected verb name after ':'.");
+                var verbName = ParseVerbCallName();
                 Consume(TokenKind.LeftParen, "Expected '(' after verb name.");
-                var arguments = ParseArguments();
+                var args = ParseArguments();
                 Consume(TokenKind.RightParen, "Expected ')' after verb arguments.");
-                expression = new VerbCallExpressionNode(expression, verb.Text, arguments);
+                expression = new VerbCallExpressionNode(expression, verbName, args);
                 continue;
             }
 
@@ -412,6 +460,16 @@ public sealed class MooParser {
         while (Match(TokenKind.Comma));
 
         return arguments;
+    }
+
+    private string ParseVerbCallName() {
+        if (Match(TokenKind.At)) {
+            var name = Consume(TokenKind.Identifier, "Expected verb name after '@'.");
+            return "@" + name.Text;
+        }
+
+        var verb = Consume(TokenKind.Identifier, "Expected verb name after ':'.");
+        return verb.Text;
     }
 
     // ── Helpers (unchanged) ───────────────────────────────────────
