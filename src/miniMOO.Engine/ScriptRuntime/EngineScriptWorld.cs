@@ -52,6 +52,8 @@ public sealed class EngineScriptWorld : IScriptWorld {
                 _objects.ContentsOf(obj.Id)
                     .Select(child => (MooValue)new MooValue.Object(child.Id))
                     .ToList()),
+            "aliases" => new MooValue.List(
+                obj.Aliases.Select(a => (MooValue)new MooValue.String(a)).ToList()),
             _ => null
         };
 
@@ -141,5 +143,38 @@ public sealed class EngineScriptWorld : IScriptWorld {
             ?? throw new InvalidOperationException($"Object {objId} not found.");
         if (!obj.Aliases.Contains(alias, StringComparer.OrdinalIgnoreCase))
             obj.Aliases.Add(alias);
+    }
+
+    public void AddVerb(ObjectId objId, string verbNames, string script, ObjectId ownerId) {
+        var obj = _objects.Get(objId)
+            ?? throw new InvalidOperationException($"Object {objId} not found.");
+
+        var verb = new MooVerb {
+            OwnerId = ownerId,
+            DirectObject = VerbObjectSpec.None,
+            Preposition = "none",
+            IndirectObject = VerbObjectSpec.None,
+            ImplementationKind = VerbImplementationKind.Script,
+            Implementation = script
+        };
+
+        foreach (var name in verbNames.Split(',').Select(n => n.Trim()).Where(n => n.Length > 0))
+            verb.Names.Add(name);
+
+        obj.Verbs.Add(verb);
+    }
+
+    public MooValue? GetVerbInfo(ObjectId id, string verbName) {
+        var obj = _objects.Get(id);
+        if (obj is null) return null;
+
+        var verb = obj.Verbs.FirstOrDefault(v => v.MatchesName(verbName));
+        if (verb is null) return null;
+
+        return new MooValue.List([
+            new MooValue.Object(verb.OwnerId),
+        new MooValue.Integer((int)verb.Flags),
+        new MooValue.String(string.Join(" ", verb.Names))
+        ]);
     }
 }

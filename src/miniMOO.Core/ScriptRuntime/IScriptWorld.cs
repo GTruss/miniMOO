@@ -18,4 +18,6 @@ public interface IScriptWorld {
     void SetObjectName(ObjectId objId, string name);
     void SetProperty(ObjectId objId, string propName, MooValue value);
     void AddAlias(ObjectId objId, string alias);
+    void AddVerb(ObjectId objId, string verbNames, string script, ObjectId ownerId);
+    MooValue? GetVerbInfo(ObjectId id, string verbName);
 }

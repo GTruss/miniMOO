@@ -4,7 +4,7 @@ public enum BinaryOp {
     Add, Subtract, Multiply, Divide, Modulo,
     Equal, NotEqual,
     Less, LessEqual, Greater, GreaterEqual,
-    And, Or
+    And, Or, In
 }
 
 public enum UnaryOp { Not, Negate }
@@ -93,3 +93,28 @@ public sealed record PropertyAssignmentExpressionNode(
     ExpressionNode Target,
     string PropertyName,
     ExpressionNode Value) : ExpressionNode;
+
+public sealed record RangeForStatementNode(
+    string Variable,
+    ExpressionNode From,
+    ExpressionNode To,
+    IReadOnlyList<StatementNode> Body) : StatementNode;
+
+public sealed record DestructuringAssignmentNode(
+    IReadOnlyList<string> Variables,
+    ExpressionNode Value) : ExpressionNode;
+
+public sealed record TryStatementNode(
+    IReadOnlyList<StatementNode> Body,
+    IReadOnlyList<ExceptClauseNode> Clauses) : StatementNode;
+
+public sealed record ExceptClauseNode(
+    string? Variable,
+    IReadOnlyList<ExpressionNode> Codes,
+    IReadOnlyList<StatementNode> Body);
+
+public sealed record BacktickExpressionNode(
+    ExpressionNode Expression,
+    IReadOnlyList<ExpressionNode> ErrorCodes,
+    ExpressionNode DefaultValue) : ExpressionNode;
+

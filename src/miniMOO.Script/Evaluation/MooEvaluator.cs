@@ -8,6 +8,10 @@ internal sealed class MooReturnException : Exception {
     public MooValue? Value { get; }
     public MooReturnException(MooValue? value) : base("Script return") => Value = value;
 }
+public sealed class MooScriptException : Exception {
+    public int ErrorCode { get; }
+    public MooScriptException(int code, string message) : base(message) => ErrorCode = code;
+}
 
 public sealed class MooEvaluator {
     private readonly ScriptContext _context;
@@ -44,6 +48,9 @@ public sealed class MooEvaluator {
             case ForStatementNode forStmt:
                 return await ExecuteForStatementAsync(forStmt);
 
+            case RangeForStatementNode rangeFor:
+                return await ExecuteRangeForStatementAsync(rangeFor);
+
             case WhileStatementNode whileStmt:
                 return await ExecuteWhileStatementAsync(whileStmt);
 
@@ -53,6 +60,9 @@ public sealed class MooEvaluator {
                         : null;
                     throw new MooReturnException(value);
                 }
+
+            case TryStatementNode tryStmt:
+                return await ExecuteTryStatementAsync(tryStmt);
 
             default:
                 throw new MooEvaluationException(
@@ -101,12 +111,62 @@ public sealed class MooEvaluator {
         return result;
     }
 
+    private async Task<MooValue?> ExecuteRangeForStatementAsync(RangeForStatementNode rangeFor) {
+        var fromVal = await EvaluateExpressionAsync(rangeFor.From);
+        var toVal = await EvaluateExpressionAsync(rangeFor.To);
+
+        if (fromVal is not MooValue.Integer fromInt || toVal is not MooValue.Integer toInt)
+            throw new MooEvaluationException("Range bounds must be integers.");
+
+        MooValue? result = null;
+        for (var i = fromInt.Value; i <= toInt.Value; i++) {
+            _locals[rangeFor.Variable] = new MooValue.Integer(i);
+            foreach (var stmt in rangeFor.Body)
+                result = await ExecuteStatementAsync(stmt);
+        }
+        return result;
+    }
+
     private async Task<MooValue?> ExecuteWhileStatementAsync(WhileStatementNode whileStmt) {
         MooValue? result = null;
         while (IsTruthy(await EvaluateExpressionAsync(whileStmt.Condition)))
             foreach (var stmt in whileStmt.Body)
                 result = await ExecuteStatementAsync(stmt);
         return result;
+    }
+
+    private async Task<MooValue?> ExecuteTryStatementAsync(TryStatementNode tryStmt) {
+        try {
+            MooValue? result = null;
+            foreach (var stmt in tryStmt.Body)
+                result = await ExecuteStatementAsync(stmt);
+            return result;
+        }
+        catch (MooScriptException ex) {
+            foreach (var clause in tryStmt.Clauses) {
+                var matches = false;
+                foreach (var codeExpr in clause.Codes) {
+                    var codeVal = await EvaluateExpressionAsync(codeExpr);
+                    if (codeVal is MooValue.Integer codeInt
+                        && (codeInt.Value == MooErrorCode.Any || codeInt.Value == ex.ErrorCode)) {
+                        matches = true;
+                        break;
+                    }
+                }
+                if (clause.Codes.Count == 0) matches = true; // no codes = catch any
+
+                if (!matches) continue;
+
+                if (clause.Variable is not null)
+                    _locals[clause.Variable] = new MooValue.Integer(ex.ErrorCode);
+
+                MooValue? result = null;
+                foreach (var stmt in clause.Body)
+                    result = await ExecuteStatementAsync(stmt);
+                return result;
+            }
+            throw; // no clause matched
+        }
     }
 
     // ── Expressions ───────────────────────────────────────────────
@@ -146,6 +206,9 @@ public sealed class MooEvaluator {
             case PropertyAssignmentExpressionNode propAssign:
                 return await EvaluatePropertyAssignmentAsync(propAssign);
 
+            case DestructuringAssignmentNode destruct:
+                return await EvaluateDestructuringAsync(destruct);
+
             case VerbCallExpressionNode verbCall:
                 return await EvaluateVerbCallAsync(verbCall);
 
@@ -154,6 +217,9 @@ public sealed class MooEvaluator {
 
             case ListLiteralExpressionNode listLit:
                 return await EvaluateListLiteralAsync(listLit);
+
+            case BacktickExpressionNode backtick:
+                return await EvaluateBacktickAsync(backtick);
 
             case SpliceExpressionNode:
                 throw new MooEvaluationException(
@@ -199,6 +265,7 @@ public sealed class MooEvaluator {
             BinaryOp.LessEqual => Compare(leftVal, rightVal, (a, b) => a <= b),
             BinaryOp.Greater => Compare(leftVal, rightVal, (a, b) => a > b),
             BinaryOp.GreaterEqual => Compare(leftVal, rightVal, (a, b) => a >= b),
+            BinaryOp.In => InOperator(leftVal, rightVal),
 
             _ => throw new MooEvaluationException($"Unknown binary op: {binary.Op}")
         };
@@ -236,6 +303,19 @@ public sealed class MooEvaluator {
             "iobj" => _context.IndirectObjectId is { } iobjId
                 ? new MooValue.Object(iobjId)
                 : MooValue.NothingValue,
+            "here" => _context.World.GetProperty(_context.PlayerId, "location") ?? MooValue.NothingValue,
+            "e_none" => new MooValue.Integer(MooErrorCode.E_NONE),
+            "e_type" => new MooValue.Integer(MooErrorCode.E_TYPE),
+            "e_div" => new MooValue.Integer(MooErrorCode.E_DIV),
+            "e_perm" => new MooValue.Integer(MooErrorCode.E_PERM),
+            "e_propnf" => new MooValue.Integer(MooErrorCode.E_PROPNF),
+            "e_verbnf" => new MooValue.Integer(MooErrorCode.E_VERBNF),
+            "e_varnf" => new MooValue.Integer(MooErrorCode.E_VARNF),
+            "e_invind" => new MooValue.Integer(MooErrorCode.E_INVIND),
+            "e_range" => new MooValue.Integer(MooErrorCode.E_RANGE),
+            "e_args" => new MooValue.Integer(MooErrorCode.E_ARGS),
+            "e_invarg" => new MooValue.Integer(MooErrorCode.E_INVARG),
+            "any" => new MooValue.Integer(MooErrorCode.Any),
             _ => throw new MooEvaluationException($"Unknown variable: {identifier.Name}")
         };
     }
@@ -244,18 +324,26 @@ public sealed class MooEvaluator {
         var target = await EvaluateExpressionAsync(indexExpr.Target) ?? MooValue.NothingValue;
         var index = await EvaluateExpressionAsync(indexExpr.Index) ?? MooValue.NothingValue;
 
-        if (target is not MooValue.List list)
-            throw new MooEvaluationException("Index operator requires a list.");
-
         if (index is not MooValue.Integer idx)
-            throw new MooEvaluationException("List index must be an integer.");
+            throw new MooEvaluationException("Index must be an integer.");
 
-        // LambdaMOO lists are 1-based
         var i = (int)idx.Value;
-        if (i < 1 || i > list.Items.Count)
-            throw new MooEvaluationException($"List index {i} out of range (length {list.Items.Count}).");
 
-        return list.Items[i - 1];
+        if (target is MooValue.List list) {
+            if (i < 1 || i > list.Items.Count)
+                throw new MooEvaluationException(
+                    $"List index {i} out of range (length {list.Items.Count}).");
+            return list.Items[i - 1];
+        }
+
+        if (target is MooValue.String str) {
+            if (i < 1 || i > str.Value.Length)
+                throw new MooEvaluationException(
+                    $"String index {i} out of range (length {str.Value.Length}).");
+            return new MooValue.String(str.Value[i - 1].ToString());
+        }
+
+        throw new MooEvaluationException("Index operator requires a list or string.");
     }
 
     private async Task<MooValue?> EvaluatePropertyAccessAsync(
@@ -280,6 +368,21 @@ public sealed class MooEvaluator {
 
         var value = await EvaluateExpressionAsync(propAssign.Value);
         _context.World.SetProperty(obj.Value, propAssign.PropertyName, value);
+
+        return value;
+    }
+
+    private async Task<MooValue?> EvaluateDestructuringAsync(DestructuringAssignmentNode destruct) {
+        var value = await EvaluateExpressionAsync(destruct.Value) ?? MooValue.NothingValue;
+
+        if (value is not MooValue.List list)
+            throw new MooEvaluationException("Destructuring requires a list on the right side.");
+
+        for (var i = 0; i < destruct.Variables.Count; i++) {
+            _locals[destruct.Variables[i]] = i < list.Items.Count
+                ? list.Items[i]
+                : MooValue.NothingValue;
+        }
 
         return value;
     }
@@ -339,6 +442,22 @@ public sealed class MooEvaluator {
         return new MooValue.List(items);
     }
 
+    private async Task<MooValue?> EvaluateBacktickAsync(BacktickExpressionNode backtick) {
+        try {
+            return await EvaluateExpressionAsync(backtick.Expression);
+        }
+        catch (MooScriptException ex) {
+            foreach (var codeExpr in backtick.ErrorCodes) {
+                var codeVal = await EvaluateExpressionAsync(codeExpr);
+
+                if (codeVal is MooValue.Integer codeInt
+                    && (codeInt.Value == MooErrorCode.Any || codeInt.Value == ex.ErrorCode))
+                    return await EvaluateExpressionAsync(backtick.DefaultValue);
+            }
+            throw;
+        }
+    }
+
     private async Task<MooValue?> EvaluateFunctionCallAsync(
         FunctionCallExpressionNode functionCall) {
 
@@ -366,6 +485,8 @@ public sealed class MooEvaluator {
             "index" => Index(args),
             "substr" => Substr(args),
             "add_alias" => AddAlias(args),
+            "add_verb" => AddVerbBuiltin(args),
+            "verb_info" => VerbInfo(args),
             _ => throw new MooEvaluationException($"Unknown function: {functionCall.FunctionName}")
         };
     }
@@ -523,6 +644,27 @@ public sealed class MooEvaluator {
         return MooValue.NothingValue;
     }
 
+    private MooValue AddVerbBuiltin(IReadOnlyList<MooValue> args) {
+        if (args.Count < 3
+            || args[0] is not MooValue.Object obj
+            || args[1] is not MooValue.String names
+            || args[2] is not MooValue.String script)
+            throw new MooEvaluationException("add_verb() requires an object, a name string, and a script string.");
+
+        _context.World.AddVerb(obj.Value, names.Value, script.Value, _context.PlayerId);
+        return MooValue.NothingValue;
+    }
+
+    private MooValue VerbInfo(IReadOnlyList<MooValue> args) {
+        if (args.Count < 2
+            || args[0] is not MooValue.Object obj
+            || args[1] is not MooValue.String name)
+            throw new MooEvaluationException("verb_info() requires an object and a verb name.");
+
+        return _context.World.GetVerbInfo(obj.Value, name.Value)
+            ?? throw new MooScriptException(MooErrorCode.E_VERBNF, $"Verb not found: {name.Value}");
+    }
+
     private static MooValue Add(MooValue left, MooValue right) => (left, right) switch {
         (MooValue.Integer l, MooValue.Integer r) => new MooValue.Integer(l.Value + r.Value),
         (MooValue.String l, MooValue.String r) => new MooValue.String(l.Value + r.Value),
@@ -553,6 +695,17 @@ public sealed class MooEvaluator {
 
         throw new MooEvaluationException(
             $"Cannot compare {left.GetType().Name} and {right.GetType().Name}.");
+    }
+
+    private static MooValue InOperator(MooValue left, MooValue right) {
+        if (right is not MooValue.List list)
+            throw new MooEvaluationException("'in' requires a list on the right side.");
+
+        for (int i = 0; i < list.Items.Count; i++)
+            if (MooEqual(list.Items[i], left))
+                return new MooValue.Integer(i + 1); // 1-based
+
+        return new MooValue.Integer(0);
     }
 
     private static bool MooEqual(MooValue left, MooValue right) => (left, right) switch {

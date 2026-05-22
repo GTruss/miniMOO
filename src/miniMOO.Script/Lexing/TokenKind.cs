@@ -17,6 +17,7 @@ public enum TokenKind {
     Semicolon,
     Colon,
     Dot,
+    DotDot,
     DollarIdentifier,  // $name — shorthand
 
     Plus,
@@ -34,9 +35,10 @@ public enum TokenKind {
     Greater,
     GreaterEqual,
 
-    At,
     AmpAmp,
     PipePipe,
+
+    At,
 
     If, 
     Else,
@@ -47,5 +49,12 @@ public enum TokenKind {
     In,
     EndFor,
     While,
-    EndWhile
+    EndWhile,
+
+    Try,
+    Except,
+    EndTry,
+    Backtick,
+    Apostrophe,
+    FatArrow,
 }

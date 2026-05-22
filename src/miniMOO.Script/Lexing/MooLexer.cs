@@ -48,7 +48,9 @@ public sealed class MooLexer {
             ',' => Make(TokenKind.Comma, start, line, column),
             ';' => Make(TokenKind.Semicolon, start, line, column),
             ':' => Make(TokenKind.Colon, start, line, column),
-            '.' => Make(TokenKind.Dot, start, line, column),
+            '.' => Match('.')
+                ? Make(TokenKind.DotDot, start, line, column)
+                : Make(TokenKind.Dot, start, line, column),
             '@' => Make(TokenKind.At, start, line, column),
             '$' => ReadDollarIdentifier(start, line, column),
 
@@ -70,7 +72,9 @@ public sealed class MooLexer {
 
             '=' => Match('=')
                 ? Make(TokenKind.EqualEqual, start, line, column)
-                : Make(TokenKind.Equal, start, line, column),
+                : Match('>')
+                    ? Make(TokenKind.FatArrow, start, line, column)
+                    : Make(TokenKind.Equal, start, line, column),
 
             '!' => Match('=')
                 ? Make(TokenKind.BangEqual, start, line, column)
@@ -86,6 +90,9 @@ public sealed class MooLexer {
 
             '"' => ReadString(start, line, column),
             '#' => ReadObjectId(start, line, column),
+
+            '`' => Make(TokenKind.Backtick, start, line, column),
+            '\'' => Make(TokenKind.Apostrophe, start, line, column),
 
             _ when IsIdentifierStart(ch) =>
                 ReadIdentifier(start, line, column),
@@ -244,6 +251,9 @@ public sealed class MooLexer {
             "endfor" => TokenKind.EndFor,
             "while" => TokenKind.While,
             "endwhile" => TokenKind.EndWhile,
+            "try" => TokenKind.Try,
+            "except" => TokenKind.Except,
+            "endtry" => TokenKind.EndTry,
             _ => TokenKind.Identifier
         };
 }
