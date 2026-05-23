@@ -35,7 +35,9 @@ public sealed record ObjectLiteralExpressionNode(
 
 public sealed record PropertyAccessExpressionNode(
     ExpressionNode Target,
-    string PropertyName) : ExpressionNode;
+    string PropertyName,
+    int Line,
+    int Column) : ExpressionNode;
 
 public sealed record VerbCallExpressionNode(
     ExpressionNode Target,
@@ -86,12 +88,22 @@ public sealed record IndexExpressionNode(
     ExpressionNode Target,
     ExpressionNode Index) : ExpressionNode;
 
+public sealed record SliceExpressionNode(
+    ExpressionNode Target,
+    ExpressionNode From,
+    ExpressionNode To) : ExpressionNode;
+
 public sealed record ListLiteralExpressionNode(
     IReadOnlyList<ExpressionNode> Items) : ExpressionNode;
 
 public sealed record PropertyAssignmentExpressionNode(
     ExpressionNode Target,
     string PropertyName,
+    ExpressionNode Value) : ExpressionNode;
+
+public sealed record IndexedAssignmentExpressionNode(
+    ExpressionNode Target,
+    ExpressionNode Index,
     ExpressionNode Value) : ExpressionNode;
 
 public sealed record RangeForStatementNode(
@@ -103,6 +115,7 @@ public sealed record RangeForStatementNode(
 public sealed record DestructuringSlotNode(
     string Name,
     bool IsOptional,
+    bool IsRest,
     ExpressionNode? DefaultValue) : ScriptNode;
 
 public sealed record DestructuringAssignmentNode(

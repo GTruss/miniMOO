@@ -61,18 +61,18 @@ public static partial class WorldSeeder {
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         su.Verbs.Add(ScriptVerb(["regexp_quote"], """
-            string = tostr(args[1]);
+            string = args[1];
             quoted = "";
             while (m = rmatch(string, "[][$^.*+?%].*"))
-              quoted = "%" + substr(string, m[1], m[2] - m[1] + 1) + quoted;
-              string = substr(string, 1, m[1] - 1);
+              quoted = "%" + string[m[1]..m[2]] + quoted;
+              string = string[1..m[1] - 1];
             endwhile
             return string + quoted;
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         su.Verbs.Add(ScriptVerb(["index_delimited", "index_d"], """
-            pattern = "%(%W%|^%)" + $string_utils:regexp_quote(tostr(args[2])) + "%(%W%|$%)";
-            return (m = match(tostr(args[1]), pattern)) ? m[3][1][2] + 1 | 0;
+            args[2] = "%(%W%|^%)" + $string_utils:regexp_quote(args[2]) + "%(%W%|$%)";
+            return (m = match(@args)) ? m[3][1][2] + 1 | 0;       
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         repo.Add(su);

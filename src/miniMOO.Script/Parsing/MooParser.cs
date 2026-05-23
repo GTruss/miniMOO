@@ -192,6 +192,13 @@ public sealed class MooParser {
 
         var expr = ParseConditional();
 
+        // Indexed assignment: list[i] = value, obj.prop[i] = value
+        if (expr is IndexExpressionNode indexAccess && Match(TokenKind.Equal))
+            return new IndexedAssignmentExpressionNode(
+                indexAccess.Target,
+                indexAccess.Index,
+                ParseAssignment());
+
         // Property assignment: obj.prop = value
         if (expr is PropertyAccessExpressionNode propAccess && Match(TokenKind.Equal))
             return new PropertyAssignmentExpressionNode(
@@ -200,11 +207,33 @@ public sealed class MooParser {
         return expr;
     }
 
-    private bool LooksLikeDestructuringAssignment()
-        => Check(TokenKind.LeftBrace)
-        && _position + 1 < _tokens.Count
-        && (_tokens[_position + 1].Kind == TokenKind.Identifier
-            || _tokens[_position + 1].Kind == TokenKind.Question);
+    private bool LooksLikeDestructuringAssignment() {
+        if (!Check(TokenKind.LeftBrace))
+            return false;
+
+        var depth = 0;
+
+        for (var i = _position; i < _tokens.Count; i++) {
+            var token = _tokens[i];
+
+            if (token.Kind == TokenKind.LeftBrace) {
+                depth++;
+                continue;
+            }
+
+            if (token.Kind == TokenKind.RightBrace) {
+                depth--;
+
+                if (depth == 0) {
+                    var next = i + 1;
+                    return next < _tokens.Count
+                        && _tokens[next].Kind == TokenKind.Equal;
+                }
+            }
+        }
+
+        return false;
+    }
 
     private bool TryParseDestructuringAssignment(out DestructuringAssignmentNode destructuring) {
         destructuring = null!;
@@ -224,6 +253,18 @@ public sealed class MooParser {
 
         if (!Check(TokenKind.RightBrace)) {
             do {
+                var isRest = Match(TokenKind.At);
+
+                if (isRest) {
+                    var restName = Consume(TokenKind.Identifier, "Expected variable name after '@' in destructuring assignment.");
+                    slots.Add(new DestructuringSlotNode(restName.Text, IsOptional: false, IsRest: true, DefaultValue: null));
+
+                    if (!Check(TokenKind.RightBrace))
+                        throw new MooParseException(Current, "Rest destructuring slot must be last.");
+
+                    break;
+                }
+
                 var isOptional = Match(TokenKind.Question);
                 var name = Consume(TokenKind.Identifier, "Expected variable name in destructuring assignment.");
                 ExpressionNode? defaultValue = null;
@@ -234,7 +275,7 @@ public sealed class MooParser {
                 if (!isOptional && defaultValue is not null)
                     throw new MooParseException(name, "Only optional destructuring slots can have defaults.");
 
-                slots.Add(new DestructuringSlotNode(name.Text, isOptional, defaultValue));
+                slots.Add(new DestructuringSlotNode(name.Text, isOptional, IsRest: false, defaultValue));
             } while (Match(TokenKind.Comma));
         }
 
@@ -360,7 +401,11 @@ public sealed class MooParser {
         while (true) {
             if (Match(TokenKind.Dot)) {
                 var property = Consume(TokenKind.Identifier, "Expected property name after '.'.");
-                expression = new PropertyAccessExpressionNode(expression, property.Text);
+                expression = new PropertyAccessExpressionNode(
+                    expression,
+                    property.Text,
+                    property.Line,
+                    property.Column);
                 continue;
             }
 
@@ -374,9 +419,17 @@ public sealed class MooParser {
             }
 
             if (Match(TokenKind.LeftBracket)) {
-                var index = ParseExpression();
+                var from = ParseExpression();
+
+                if (Match(TokenKind.DotDot)) {
+                    var to = ParseExpression();
+                    Consume(TokenKind.RightBracket, "Expected ']' after slice.");
+                    expression = new SliceExpressionNode(expression, from, to);
+                    continue;
+                }
+
                 Consume(TokenKind.RightBracket, "Expected ']' after index.");
-                expression = new IndexExpressionNode(expression, index);
+                expression = new IndexExpressionNode(expression, from);
                 continue;
             }
             break;
@@ -434,10 +487,14 @@ public sealed class MooParser {
 
         if (Match(TokenKind.DollarIdentifier)) {
             // $wiz desugars to #0.wiz at parse time — faithful to LambdaMOO
-            var name = (string)(Previous().Value ?? "");
+            var token = Previous();
+            var name = (string)(token.Value ?? "");
+
             return new PropertyAccessExpressionNode(
                 new ObjectLiteralExpressionNode(0L),
-                name);
+                name,
+                token.Line,
+                token.Column);
         }
 
         if (Match(TokenKind.Backtick)) {

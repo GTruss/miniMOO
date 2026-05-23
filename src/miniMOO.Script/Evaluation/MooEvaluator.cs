@@ -13,9 +13,28 @@ internal sealed class MooReturnException : Exception {
     public MooValue? Value { get; }
     public MooReturnException(MooValue? value) : base("Script return") => Value = value;
 }
+
+public sealed record MooTraceFrame(
+    ObjectId ThisId,
+    ObjectId? DefiningObjectId,
+    string Verb,
+    int? Line,
+    string Description);
+
 public sealed class MooScriptException : Exception {
     public int ErrorCode { get; }
-    public MooScriptException(int code, string message) : base(message) => ErrorCode = code;
+    public int? Line { get; }
+    public int? Column { get; }
+    public string? SourceText { get; set; }
+    public string? SourceLabel { get; set; }
+    public List<MooTraceFrame> Trace { get; } = [];
+
+    public MooScriptException(int code, string message, int? line = null, int? column = null)
+        : base(message) {
+        ErrorCode = code;
+        Line = line;
+        Column = column;
+    }
 }
 
 public sealed class MooEvaluator {
@@ -212,11 +231,17 @@ public sealed class MooEvaluator {
             case IndexExpressionNode indexExpr:
                 return await EvaluateIndexAsync(indexExpr);
 
+            case SliceExpressionNode sliceExpr:
+                return await EvaluateSliceAsync(sliceExpr);
+
             case PropertyAccessExpressionNode property:
                 return await EvaluatePropertyAccessAsync(property);
 
             case PropertyAssignmentExpressionNode propAssign:
                 return await EvaluatePropertyAssignmentAsync(propAssign);
+
+            case IndexedAssignmentExpressionNode indexedAssign:
+                return await EvaluateIndexedAssignmentAsync(indexedAssign);
 
             case DestructuringAssignmentNode destruct:
                 return await EvaluateDestructuringAsync(destruct);
@@ -379,8 +404,57 @@ public sealed class MooEvaluator {
         throw new MooEvaluationException("Index operator requires a list or string.");
     }
 
-    private async Task<MooValue?> EvaluatePropertyAccessAsync(
-        PropertyAccessExpressionNode property) {
+    private async Task<MooValue?> EvaluateSliceAsync(SliceExpressionNode sliceExpr) {
+        var target = await EvaluateExpressionAsync(sliceExpr.Target) ?? MooValue.NothingValue;
+        var from = await EvaluateExpressionAsync(sliceExpr.From) ?? MooValue.NothingValue;
+        var to = await EvaluateExpressionAsync(sliceExpr.To) ?? MooValue.NothingValue;
+
+        if (from is not MooValue.Integer fromIndex || to is not MooValue.Integer toIndex)
+            throw new MooEvaluationException("Slice indexes must be integers.");
+
+        var start = (int)fromIndex.Value;
+        var end = (int)toIndex.Value;
+
+        if (target is MooValue.String str)
+            return SliceString(str.Value, start, end);
+
+        if (target is MooValue.List list)
+            return SliceList(list.Items, start, end);
+
+        throw new MooEvaluationException("Slice operator requires a list or string.");
+    }
+
+    private static MooValue.String SliceString(string value, int start, int end) {
+        if (start < 1 || start > value.Length + 1)
+            throw new MooEvaluationException(
+                $"String slice start {start} out of range (length {value.Length}).");
+
+        if (end < 0 || end > value.Length)
+            throw new MooEvaluationException(
+                $"String slice end {end} out of range (length {value.Length}).");
+
+        if (end < start)
+            return new MooValue.String("");
+
+        return new MooValue.String(value.Substring(start - 1, end - start + 1));
+    }
+
+    private static MooValue.List SliceList(IReadOnlyList<MooValue> items, int start, int end) {
+        if (start < 1 || start > items.Count + 1)
+            throw new MooEvaluationException(
+                $"List slice start {start} out of range (length {items.Count}).");
+
+        if (end < 0 || end > items.Count)
+            throw new MooEvaluationException(
+                $"List slice end {end} out of range (length {items.Count}).");
+
+        if (end < start)
+            return new MooValue.List([]);
+
+        return new MooValue.List(items.Skip(start - 1).Take(end - start + 1).ToList());
+    }
+
+    private async Task<MooValue?> EvaluatePropertyAccessAsync(PropertyAccessExpressionNode property) {
 
         var target = await EvaluateExpressionAsync(property.Target);
 
@@ -388,8 +462,16 @@ public sealed class MooEvaluator {
             throw new MooEvaluationException(
                 $"Cannot read property '{property.PropertyName}' from non-object value.");
 
-        return _context.World.GetProperty(obj.Value, property.PropertyName)
-            ?? MooValue.NothingValue;
+        var value = _context.World.GetProperty(obj.Value, property.PropertyName);
+
+        if (value is null)
+            throw new MooScriptException(
+                MooErrorCode.E_PROPNF,
+                "Property not found",
+                property.Line,
+                property.Column);
+
+        return value;
     }
 
     private async Task<MooValue?> EvaluatePropertyAssignmentAsync(
@@ -405,6 +487,83 @@ public sealed class MooEvaluator {
         return value;
     }
 
+    private async Task<MooValue?> EvaluateIndexedAssignmentAsync(
+        IndexedAssignmentExpressionNode assignment) {
+
+        var target = await EvaluateExpressionAsync(assignment.Target) ?? MooValue.NothingValue;
+        var index = await EvaluateExpressionAsync(assignment.Index) ?? MooValue.NothingValue;
+        var value = await EvaluateExpressionAsync(assignment.Value) ?? MooValue.NothingValue;
+
+        if (index is not MooValue.Integer idx)
+            throw new MooEvaluationException("Indexed assignment requires an integer index.");
+
+        var updatedTarget = AssignIndexedValue(target, (int)idx.Value, value);
+        await WriteAssignableTargetAsync(assignment.Target, updatedTarget);
+
+        return value;
+    }
+
+    private async Task WriteAssignableTargetAsync(ExpressionNode target, MooValue value) {
+        switch (target) {
+            case IdentifierExpressionNode identifier:
+                _locals[identifier.Name.ToLowerInvariant()] = value;
+                return;
+
+            case PropertyAccessExpressionNode property: {
+                    var objValue = await EvaluateExpressionAsync(property.Target);
+
+                    if (objValue is not MooValue.Object obj)
+                        throw new MooEvaluationException(
+                            $"Cannot write property '{property.PropertyName}' on non-object value.");
+
+                    _context.World.SetProperty(obj.Value, property.PropertyName, value);
+                    return;
+                }
+
+            case IndexExpressionNode index: {
+                    var container = await EvaluateExpressionAsync(index.Target) ?? MooValue.NothingValue;
+                    var indexValue = await EvaluateExpressionAsync(index.Index) ?? MooValue.NothingValue;
+
+                    if (indexValue is not MooValue.Integer idx)
+                        throw new MooEvaluationException("Indexed assignment requires an integer index.");
+
+                    var updatedContainer = AssignIndexedValue(container, (int)idx.Value, value);
+                    await WriteAssignableTargetAsync(index.Target, updatedContainer);
+                    return;
+                }
+
+            default:
+                throw new MooEvaluationException("Invalid indexed assignment target.");
+        }
+    }
+
+    private static MooValue AssignIndexedValue(MooValue target, int index, MooValue value) {
+        if (target is MooValue.List list) {
+            if (index < 1 || index > list.Items.Count)
+                throw new MooEvaluationException(
+                    $"List assignment index {index} out of range (length {list.Items.Count}).");
+
+            var items = list.Items.ToList();
+            items[index - 1] = value;
+            return new MooValue.List(items);
+        }
+
+        if (target is MooValue.String str) {
+            if (value is not MooValue.String replacement || replacement.Value.Length != 1)
+                throw new MooEvaluationException("String indexed assignment requires a one-character string.");
+
+            if (index < 1 || index > str.Value.Length)
+                throw new MooEvaluationException(
+                    $"String assignment index {index} out of range (length {str.Value.Length}).");
+
+            var chars = str.Value.ToCharArray();
+            chars[index - 1] = replacement.Value[0];
+            return new MooValue.String(new string(chars));
+        }
+
+        throw new MooEvaluationException("Indexed assignment requires a list or string.");
+    }
+
     private async Task<MooValue?> EvaluateDestructuringAsync(DestructuringAssignmentNode destruct) {
         var value = await EvaluateExpressionAsync(destruct.Value) ?? MooValue.NothingValue;
 
@@ -413,6 +572,11 @@ public sealed class MooEvaluator {
 
         for (var i = 0; i < destruct.Slots.Count; i++) {
             var slot = destruct.Slots[i];
+
+            if (slot.IsRest) {
+                _locals[slot.Name] = new MooValue.List(list.Items.Skip(i).ToList());
+                break;
+            }
 
             if (i < list.Items.Count) {
                 _locals[slot.Name] = list.Items[i];
@@ -589,6 +753,19 @@ public sealed class MooEvaluator {
         }
         catch (MooParseException ex) {
             throw new MooEvaluationException($"eval() parse error: {ex.Message}");
+        }
+        catch (MooScriptException ex) {
+            ex.SourceText ??= source.Value;
+            ex.SourceLabel ??= "Input to EVAL";
+
+            ex.Trace.Insert(0, new MooTraceFrame(
+                _context.ThisId,
+                _context.DefiningObjectId,
+                "eval",
+                ex.Line,
+                "... called from built-in function eval()"));
+
+            throw;
         }
     }
 

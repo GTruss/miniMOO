@@ -77,9 +77,8 @@ public static partial class WorldSeeder {
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         genRoom.Verbs.Add(ScriptVerb(["announce_all_but"], """
-            ignore = args[1];
-            text = listdelete(args, 1);
-        
+            {ignore, @text} = args;
+                
             contents = this:contents();
             for l in (ignore)
               contents = setremove(contents, l);
@@ -184,15 +183,16 @@ public static partial class WorldSeeder {
                 player:tell($string_utils:english_list(player_names), " here.");
               endif
             endif
-
-            if (exits)
-              names = {};
-              for exit in (exits)
-                names = {@names, exit.name};
-              endfor
-              player:tell("Obvious exits: ", $string_utils:english_list(names), ".");
-            endif
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+        /*
+            if (exits)
+                names = {};
+                for exit in (exits)
+                names = {@names, exit.name};
+                endfor
+                player:tell("Obvious exits: ", $string_utils:english_list(names), ".");
+            endif
+        */
 
         genRoom.Verbs.Add(ScriptVerb(["go"], """
             if (!args || !(dir = args[1]))
@@ -507,6 +507,10 @@ public static partial class WorldSeeder {
 
         genProg.Verbs.Add(ScriptVerb(["eval_cmd_string"], """
             program = args[1];
+            if (program[1] == ";")
+              program = program[2..length(program)];
+            endif
+            
             program = program + ";";
 
 

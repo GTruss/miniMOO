@@ -11,4 +11,10 @@ public sealed record ScriptResult(VerbResultKind Kind, MooValue? Value = null, s
     public static ScriptResult Failure(string message)
         => new(VerbResultKind.Failure, Error: message);
 
+    //public sealed record ScriptError(
+    //    string Message,
+    //    int? ErrorCode = null,
+    //    int? Line = null,
+    //    int? Column = null,
+    //    IReadOnlyList<MooTraceFrame>? Trace = null);
 }

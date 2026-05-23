@@ -57,7 +57,7 @@ public sealed class MooLexer {
             '&' => Match('&')
                 ? Make(TokenKind.AmpAmp, start, line, column)
                 : throw new MooLexException(
-                    $"Unexpected character '&' at line {line}, column {column}. Did you mean '&&'?"),
+                    $"Unexpected character '&'. Did you mean '&&'?", line, column),
 
             '|' => Match('|')
                 ? Make(TokenKind.PipePipe, start, line, column)
@@ -101,7 +101,7 @@ public sealed class MooLexer {
                 ReadInteger(start, line, column),
 
             _ => throw new MooLexException(
-                $"Unexpected character '{ch}' at line {line}, column {column}.")
+                $"Unexpected character '{ch}'.", line, column)
         };
     }
 
@@ -170,10 +170,10 @@ public sealed class MooLexer {
 
         if (IsAtEnd() || !char.IsDigit(Current))
             throw new MooLexException(
-                $"Expected object id after # at line {line}, column {column}.");
+                $"Expected object id after #.", line, column);
 
         while (!IsAtEnd() && char.IsDigit(Current))
-            Advance();
+            Advance(); 
 
         var text = _source[start.._position];
         var value = long.Parse(text[1..], CultureInfo.InvariantCulture);
@@ -186,6 +186,9 @@ public sealed class MooLexer {
 
         while (!IsAtEnd()) {
             var ch = Advance();
+
+            if (ch == '\r' || ch == '\n')
+                throw new MooLexException("Unterminated string", line, column);
 
             if (ch == '"') {
                 var text = _source[start.._position];
@@ -214,12 +217,12 @@ public sealed class MooLexer {
         }
 
         throw new MooLexException(
-            $"Unterminated string at line {line}, column {column}.");
+            $"Unterminated string.", line, column);
     }
 
     private Token ReadDollarIdentifier(int start, int line, int column) {
         if (IsAtEnd() || !IsIdentifierStart(Current))
-            throw new MooLexException($"Expected identifier after '$' at line {line}, column {column}.");
+            throw new MooLexException($"Expected identifier after '$'.", line, column);
 
         while (!IsAtEnd() && IsIdentifierPart(Current))
             Advance(); 

@@ -131,9 +131,13 @@ public sealed class CommandDispatcher {
             .GetAwaiter()
             .GetResult();
 
+        var message = result.Error ?? "Script failed.";
+        var frame = $"... (cmd) {thisId}:{string.Join("/", verb.Names)} called as {thisId}:{command.Verb}";
+
+
         return result.IsSuccess
             ? VerbResult.Success(result.Value)
-            : VerbResult.Failure(result.Error ?? "Script failed.");
+            : VerbResult.Failure(AppendTraceFrame(message, frame));
     }
 
     private static bool SpecMatches(MooVerb verb, ParsedCommand command, ObjectId thisId) {
@@ -161,5 +165,15 @@ public sealed class CommandDispatcher {
         }
 
         return true;
+    }
+
+    private static string AppendTraceFrame(string message, string frame) {
+        const string end = "(End of traceback)";
+
+        var marker = message.LastIndexOf(end, StringComparison.Ordinal);
+        if (marker < 0)
+            return frame + Environment.NewLine + message;
+
+        return message.Insert(marker, frame + Environment.NewLine);
     }
 }

@@ -44,11 +44,11 @@ public sealed class EngineScriptWorld : IScriptWorld {
             "name" => new MooValue.String(obj.Name),
             "location" => obj.LocationId is { } locationId
                 ? new MooValue.Object(locationId)
-                : MooValue.NothingValue,
+                : new MooValue.Object(new ObjectId(-1)),
             "owner" => new MooValue.Object(obj.OwnerId),
             "parent" => obj.ParentId is { } parentId
                 ? new MooValue.Object(parentId)
-                : MooValue.NothingValue,
+                : new MooValue.Object(new ObjectId(-1)),
             "contents" => new MooValue.List(
                 _objects.ContentsOf(obj.Id)
                     .Select(child => (MooValue)new MooValue.Object(child.Id))
@@ -95,10 +95,12 @@ public sealed class EngineScriptWorld : IScriptWorld {
 
         var result = await _scriptRuntime.ExecuteAsync(context, mooVerb.Implementation);
 
-        if (!result.IsSuccess)
-            return ScriptResult.Failure(
-                $"{definingId}:{string.Join("/", mooVerb.Names)} called as {thisId}:{verb}\n{result.Error}");
+        if (!result.IsSuccess) {
+            var message = result.Error ?? "Script failed.";
+            var frame = $"... (eng) {definingId}:{string.Join("/", mooVerb.Names)} called as {thisId}:{verb}";
 
+            return ScriptResult.Failure(AppendTraceFrame(message, frame));
+        }
         return result;
     }
 
@@ -235,5 +237,15 @@ public sealed class EngineScriptWorld : IScriptWorld {
 
         if (!result.IsSuccess)
             throw new MooEvaluationException(result.Error ?? $"{verbName} failed.");
+    }
+
+    private static string AppendTraceFrame(string message, string frame) {
+        const string end = "(End of traceback)";
+
+        var marker = message.LastIndexOf(end, StringComparison.Ordinal);
+        if (marker < 0)
+            return frame + Environment.NewLine + message;
+
+        return message.Insert(marker, frame + Environment.NewLine);
     }
 }

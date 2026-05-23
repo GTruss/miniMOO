@@ -13,7 +13,8 @@ public static partial class WorldSeeder {
         var foyer = Obj(WorldIds.Foyer, ObjectId.System, WorldIds.Room, null, "The Foyer");
         Prop(foyer, "description",
             "A modest entry hall. Pale light filters through frosted glass. " +
-            "A corridor leads east toward the library.");
+            "A corridor leads east toward the library,\nand ornate double doors on the north side of the room " +
+            "open to the grand ballroom");
 
         var library = Obj(WorldIds.Library, ObjectId.System, WorldIds.Room, null, "The Library");
         Prop(library, "description",

@@ -8,6 +8,18 @@ public static partial class WorldSeeder {
         if (wiz is null)
             return;
 
+        wiz.Verbs.Add(ScriptVerb(["@parsefail1"], """
+            player:tell("before parse failure");
+            value = "unterminated;
+            player:tell("after parse failure");
+        """));
+
+        wiz.Verbs.Add(ScriptVerb(["@parsefail2"], """
+            player:tell("before parse failure");
+            value = 1 + ;
+            player:tell("after parse failure");
+        """));
+
         wiz.Verbs.Add(ScriptVerb(["_test_destructure"], """
             {a, b} = args;
             return (a == "left" && b == "right");
@@ -34,6 +46,62 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: substr() -- expected ell got ", result);
+              failed = failed + 1;
+            endif
+
+            if ("abcdef"[2..4] == "bcd")
+              player:tell("PASS: string slicing");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: string slicing");
+              failed = failed + 1;
+            endif
+
+            slice = {10, 20, 30, 40}[2..3];
+            if (length(slice) == 2 && slice[1] == 20 && slice[2] == 30)
+              player:tell("PASS: list slicing");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: list slicing");
+              failed = failed + 1;
+            endif
+
+            if ("abc"[1..0] == "")
+              player:tell("PASS: empty string slice");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: empty string slice");
+              failed = failed + 1;
+            endif
+
+            items = {"a", "b", "c"};
+            items[2] = "B";
+            if (items[1] == "a" && items[2] == "B" && items[3] == "c")
+              player:tell("PASS: list indexed assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: list indexed assignment");
+              failed = failed + 1;
+            endif
+
+            word = "cat";
+            word[2] = "u";
+            if (word == "cut")
+              player:tell("PASS: string indexed assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: string indexed assignment");
+              failed = failed + 1;
+            endif
+
+            test_obj = create($thing);
+            test_obj.description = {"old", "value"};
+            test_obj.description[2] = "new";
+            if (test_obj.description[1] == "old" && test_obj.description[2] == "new")
+              player:tell("PASS: property indexed assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: property indexed assignment");
               failed = failed + 1;
             endif
 
@@ -109,6 +177,24 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            m = match("foobar", "o+b");
+            if (m[1] == 2 && m[2] == 4)
+              player:tell("PASS: match()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: match()");
+              failed = failed + 1;
+            endif
+
+            m = match("foobar", "z+");
+            if (length(m) == 0)
+              player:tell("PASS: match() not found");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: match() not found");
+              failed = failed + 1;
+            endif
+
             result = listappend({"a"}, "a");
             if (length(result) == 2 && result[2] == "a")
               player:tell("PASS: listappend()");
@@ -124,6 +210,56 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: listdelete()");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              listdelete({"north"}, 2);
+            except e (E_RANGE)
+              caught = e;
+            endtry
+            if (caught == E_RANGE)
+              player:tell("PASS: listdelete() range error");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: listdelete() range error");
+              failed = failed + 1;
+            endif
+
+            result = "first" || "second";
+            if (result == "first")
+              player:tell("PASS: || preserves truthy value");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: || preserves truthy value -- got ", result);
+              failed = failed + 1;
+            endif
+
+            result = "" || "fallback";
+            if (result == "fallback")
+              player:tell("PASS: || returns fallback value");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: || returns fallback value -- got ", result);
+              failed = failed + 1;
+            endif
+
+            result = 0 && "right";
+            if (result == 0)
+              player:tell("PASS: && preserves falsey value");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: && preserves falsey value -- got ", result);
+              failed = failed + 1;
+            endif
+
+            result = 1 && "right";
+            if (result == "right")
+              player:tell("PASS: && returns right value");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: && returns right value -- got ", result);
               failed = failed + 1;
             endif
 
@@ -210,6 +346,24 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: optional destructuring default");
+              failed = failed + 1;
+            endif
+
+            {first, @rest} = {"a", "b", "c"};
+            if (first == "a" && length(rest) == 2 && rest[1] == "b" && rest[2] == "c")
+              player:tell("PASS: rest destructuring assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: rest destructuring assignment");
+              failed = failed + 1;
+            endif
+
+            {only, @empty_rest} = {"a"};
+            if (only == "a" && length(empty_rest) == 0)
+              player:tell("PASS: empty rest destructuring assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: empty rest destructuring assignment");
               failed = failed + 1;
             endif
 
@@ -308,6 +462,14 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            if (typeof(1) == INT && typeof(player) == OBJ && typeof("x") == STR && typeof({1}) == LIST)
+              player:tell("PASS: type constants");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: type constants");
+              failed = failed + 1;
+            endif
+
             if (tostr("obj=", player) == "obj=#2")
               player:tell("PASS: tostr()");
               passed = passed + 1;
@@ -344,6 +506,34 @@ public static partial class WorldSeeder {
             endif
 
             test_obj = create($thing);
+            set_name(test_obj, "test object");
+            add_alias(test_obj, "test-alias");
+            add_verb(test_obj, "ping", "return \"pong\";");
+
+            if (test_obj.name == "test object")
+              player:tell("PASS: set_name()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: set_name()");
+              failed = failed + 1;
+            endif
+
+            if ("test-alias" in test_obj.aliases)
+              player:tell("PASS: add_alias()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: add_alias()");
+              failed = failed + 1;
+            endif
+
+            if (test_obj:ping() == "pong")
+              player:tell("PASS: add_verb()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: add_verb()");
+              failed = failed + 1;
+            endif
+
             move(test_obj, player);
 
             if (test_obj.location == player)
