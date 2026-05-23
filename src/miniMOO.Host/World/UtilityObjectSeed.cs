@@ -11,6 +11,7 @@ public static partial class WorldSeeder {
         AddObjectUtils(repo);
         AddListUtils(repo);
         AddCodeUtils(repo);
+        AddCommandUtils(repo);
     }
 
     // ── Generic Utilities Package (#78) ───────────────────────────
@@ -153,6 +154,133 @@ public static partial class WorldSeeder {
               endfor
               return l;
             endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["name_and_number", "nn", "name_and_number_list", "nn_list"], """
+            {objs, ?sepr = " ", @eng_args} = args;
+            if (typeof(objs) != LIST)
+              objs = {objs};
+            endif
+            name_list = {};
+            for what in (objs)
+              name = valid(what) ? what.name | {"<invalid>", "$nothing", "$ambiguous_match", "$failed_match"}[1 + (what in {#-1, #-2, #-3})];
+              name = tostr(name, sepr, "(", what, ")");
+              name_list = {@name_list, name};
+            endfor
+            return this:english_list(name_list, @eng_args);
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["match_player"], """
+            retstr = 0;
+            me = player;
+            if (length(args) < 2 || typeof(me = args[2]) == OBJ)
+              me = valid(me) && is_player(me) ? me | $failed_match;
+              if (typeof(args[1]) == STR)
+                strings = {args[1]};
+                retstr = 1;
+                "return a string, not a list";
+              else
+                strings = args[1];
+              endif
+            else
+              strings = args;
+              me = player;
+            endif
+            found = {};
+            for astr in (strings)
+              if (!astr)
+                aobj = $nothing;
+              elseif (astr == "me")
+                aobj = me;
+              elseif (valid(aobj = $string_utils:literal_object(astr)) && is_player(aobj))
+                "astr is a valid literal object number of some player, so we are done.";
+              else
+                aobj = $player_db:find(astr);
+              endif
+              found = {@found, aobj};
+            endfor
+            return retstr ? found[1] | found;      
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["match"], """
+            subject = args[1];
+            if (subject == "")
+              return $nothing;
+            endif
+            no_exact_match = no_partial_match = 1;
+            for i in [1..length(args) / 2]
+              prop_name = args[2 * i + 1];
+              for object in (typeof(olist = args[2 * i]) == LIST ? olist | {olist})
+                if (valid(object))
+                  if (typeof(str_list = `object.(prop_name) ! E_PERM, E_PROPNF => {}') != LIST)
+                    str_list = {str_list};
+                  endif
+                  if (subject in str_list)
+                    if (no_exact_match)
+                      no_exact_match = object;
+                    elseif (no_exact_match != object)
+                      return $ambiguous_match;
+                    endif
+                  else
+                    for string in (str_list)
+                      if (index(string, subject) != 1)
+                      elseif (no_partial_match)
+                        no_partial_match = object;
+                      elseif (no_partial_match != object)
+                        no_partial_match = $ambiguous_match;
+                      endif
+                    endfor
+                  endif
+                endif
+              endfor
+            endfor
+            return no_exact_match && (no_partial_match && $failed_match);
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["match_object"], """
+            {string, here, ?who = player} = args;
+            if ($failed_match != (object = this:literal_object(string)))
+              return object;
+            elseif (string == "me")
+              return who;
+            elseif (string == "here")
+              return here;
+            elseif (valid(pobject = who:match(string)) && string in {@pobject.aliases, pobject.name} || !valid(here))
+              "...exact match in player or room is bogus...";
+              return pobject;
+            elseif (valid(hobject = here:match(string)) && string in {@hobject.aliases, hobject.name} || pobject == $failed_match)
+              "...exact match in room or match in player failed completely...";
+              return hobject;
+            else
+              return pobject;
+            endif       
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["literal_object"], """
+            string = args[1];
+            if (!string)
+              return $nothing;
+            elseif (string[1] == "#" && E_TYPE != (object = $code_utils:toobj(string)))
+              return object;
+            elseif (string[1] == "~")
+              return this:match_player(string[2..$], #0);
+            elseif (string[1] == "$")
+              string[1..1] = "";
+              object = #0;
+              while (pn = string[1..(dot = index(string, ".")) ? dot - 1 | $])
+                if (!$object_utils:has_property(object, pn) || typeof(object = object.(pn)) != OBJ)
+                  return $failed_match;
+                endif
+                string = string[length(pn) + 2..$];
+              endwhile
+              if (object == #0 || typeof(object) == ERR)
+                return $failed_match;
+              else
+                return object;
+              endif
+            else
+              return $failed_match;
+            endif        
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         repo.Add(su);
@@ -347,6 +475,16 @@ public static partial class WorldSeeder {
             return 0;
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
+        genObjectUtils.Verbs.Add(ScriptVerb(["has_property"], """
+            {object, prop} = args;
+            try
+              object.(prop);
+              return 1;
+            except (E_PROPNF, E_INVIND)
+              return 0;
+            endtry       
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
         repo.Add(genObjectUtils);
     }
 
@@ -378,10 +516,47 @@ public static partial class WorldSeeder {
         var cu = Obj(WorldIds.CodeUtils, ObjectId.System, WorldIds.GenericUtilitiesPackage, null, "$code_utils");
         cu.Flags = ObjectFlags.Readable;
 
-
         cu.Verbs.Add(ScriptVerb(["error_name"], """
             return toliteral(@args);
             return this.error_names[toint(args[1]) + 1];
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        cu.Verbs.Add(ScriptVerb(["toobj"], """
+            return match(s = args[1], "^ *#[-+]?[0-9]+ *$") ? toobj(s) | E_TYPE;;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+
+        repo.Add(cu);
+
+    }
+
+    // ── $command_utils (#56) ───────────────────────────────────────
+
+    private static void AddCommandUtils(InMemoryObjectRepository repo) {
+        var cu = Obj(WorldIds.CommandUtils, WorldIds.Wizard, WorldIds.GenericUtilitiesPackage, null, "$command_utils");
+        cu.Flags = ObjectFlags.Readable;
+
+        cu.Verbs.Add(ScriptVerb(["object_match_failed"], """
+            {match_result, string} = args;
+            
+            if (index(string, "#") == 1 && $code_utils:toobj(string) != E_TYPE)
+              "...avoid the `I don't know which `#-2' you mean' message...";
+              if (!valid(match_result))
+                player:tell(tostr(string, " does not exist."));
+              endif
+              return !valid(match_result);
+            elseif (match_result == $nothing)
+              player:tell("You must give the name of some object.");
+            elseif (match_result == $failed_match)
+              player:tell(tostr("I see no \"", string, "\" here."));
+            elseif (match_result == $ambiguous_match)
+              player:tell(tostr("I don't know which \"", string, "\" you mean."));
+            elseif (!valid(match_result))
+              player:tell(tostr(match_result, " does not exist."));
+            else
+              return 0;
+            endif
+            return 1;
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
 

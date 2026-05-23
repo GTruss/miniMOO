@@ -8,6 +8,7 @@ public sealed class CommandParser {
         "in",
         "on",
         "at",
+        "as",
         "to",
         "from",
         "with",

@@ -153,3 +153,9 @@ public sealed record DynamicPropertyAssignmentExpressionNode(
     ExpressionNode Target,
     ExpressionNode PropertyName,
     ExpressionNode Value) : ExpressionNode;
+
+public sealed record SliceAssignmentExpressionNode(
+    ExpressionNode Target,
+    ExpressionNode From,
+    ExpressionNode To,
+    ExpressionNode Value) : ExpressionNode;

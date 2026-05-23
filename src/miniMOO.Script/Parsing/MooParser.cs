@@ -199,6 +199,13 @@ public sealed class MooParser {
                 indexAccess.Index,
                 ParseAssignment());
 
+        if (expr is SliceExpressionNode sliceAccess && Match(TokenKind.Equal))
+            return new SliceAssignmentExpressionNode(
+                sliceAccess.Target,
+                sliceAccess.From,
+                sliceAccess.To,
+                ParseAssignment());
+
         // Property assignment: obj.prop = value
         if (expr is PropertyAccessExpressionNode propAccess && Match(TokenKind.Equal))
             return new PropertyAssignmentExpressionNode(

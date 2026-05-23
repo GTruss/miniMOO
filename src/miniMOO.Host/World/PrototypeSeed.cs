@@ -51,6 +51,24 @@ public static partial class WorldSeeder {
             endif
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
+        root.Verbs.Add(ScriptVerb(["match"], """
+            c = this:contents();
+            return $string_utils:match(args[1], c, "name", c, "aliases");
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        root.Verbs.Add(ScriptVerb(["contents"], """
+            return this.contents;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        root.Verbs.Add(ScriptVerb(["set_description"], """
+             if (typeof(desc = args[1]) in {LIST, STR})
+              this.description = desc;
+              return 1;
+            else
+              return E_TYPE;
+            endif            
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
         repo.Add(root);
     }
 
@@ -272,6 +290,25 @@ public static partial class WorldSeeder {
             endif
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
+        genRoom.Verbs.Add(ScriptVerb(["@exits"], """
+            if (this.exits == {})
+              player:tell("This room has no conventional exits.");
+            else
+              try
+                for exit in (this.exits)
+                  try
+                    player:tell(exit.name, " (", exit, ") leads to ", valid(exit.dest) ? exit.dest.name | "???", " (", exit.dest, ") via {", $string_utils:from_list(exit.aliases, ", "), "}.");
+                  except (ANY)
+                    player:tell("Bad exit or missing .dest property:  ", $string_utils:nn(exit));
+                    "continue exit;";
+                  endtry
+                endfor
+              except (E_TYPE)
+                player:tell("Bad .exits property. This should be a list of exit objects. Please fix this.");
+              endtry
+            endif
+        """, VerbObjectSpec.None, "none", VerbObjectSpec.None));
+
         repo.Add(genRoom);
     }
 
@@ -412,6 +449,19 @@ public static partial class WorldSeeder {
             player:tell(tostr(@args));
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
+        genPlayer.Verbs.Add(ScriptVerb(["@describe", "@desc"], """
+            dobj = player:my_match_object(dobjstr);
+            if ($command_utils:object_match_failed(dobj, dobjstr))
+              "...lose...";
+            elseif (e = dobj:set_description(iobjstr))
+              player:notify("Description set.");
+            else
+              player:notify(tostr(e));
+            endif
+        """, VerbObjectSpec.Any, "as", VerbObjectSpec.Any));
+
+
+
         genPlayer.Verbs.Add(ScriptVerb(["wave"], """
             player:tell("You wave.");
             player.location:announce(player.name, " waves.");
@@ -433,8 +483,8 @@ public static partial class WorldSeeder {
         genBuilder.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
         Prop(genBuilder, "build_options", new MooValue.List([]));
 
-        genBuilder.Verbs.Add(ScriptVerb(["@buildtest"], """
-            return $build_options:get(this.build_options, args[1]);
+        genBuilder.Verbs.Add(ScriptVerb(["my_match_object"], """
+            return $string_utils:match_object(@{@args, this.location}[1..2], this);
         """, VerbObjectSpec.Any));
 
         genBuilder.Verbs.Add(ScriptVerb(["build_option"], """
@@ -457,48 +507,6 @@ public static partial class WorldSeeder {
               $building_utils:set_names(newobj, iobjstr);
             endif
             player:tell("You now have ", newobj.name, " with object number ", newobj, " and parent ", parent.name, " (", parent, ").");
-        """, VerbObjectSpec.Any, "any", VerbObjectSpec.Any));
-
-        genBuilder.Verbs.Add(ScriptVerb(["@dig2"], """
-            if (dobjstr == "")
-              player:tell("Usage: @dig <room-name>");
-              player:tell("       @dig <exit-spec>[|<return-spec>] to <room-name-or-#id>");
-              return;
-            endif
-
-            room_kind = player:build_option("dig_room");
-            if (room_kind == 0)
-              room_kind = $room;
-            endif 
-
-            player:tell("Using room prototype ", room_kind, ".");
-
-            if (iobjstr == "")
-
-              newroom = create($room);
-
-              $building_utils:set_names(newroom, dobjstr);
-              player:tell("Room ", newroom.name, " (", newroom, ") created.");
-            else
-              if (valid(iobj))
-                destroom = iobj;
-                newroom = 0;
-              else
-
-                newroom = create($room);
-
-                $building_utils:set_names(newroom, iobjstr);
-                destroom = newroom;
-              endif
-              if (valid(newroom))
-                player:tell("Room ", newroom.name, " (", newroom, ") created.");
-              endif
-              exits = $string_utils:explode(dobjstr, "|");
-              $building_utils:make_exit(exits[1], here, destroom);
-              if (length(exits) == 2)
-                $building_utils:make_exit(exits[2], destroom, here);
-              endif
-            endif
         """, VerbObjectSpec.Any, "any", VerbObjectSpec.Any));
 
         genBuilder.Verbs.Add(ScriptVerb(["@dig"], """

@@ -18,6 +18,7 @@ public static class WorldIds {
     public static readonly ObjectId BuildingUtils = new(21);
     public static readonly ObjectId ObjectUtils = new(52);
     public static readonly ObjectId ListUtils = new(55);
+    public static readonly ObjectId CommandUtils = new(56);
     public static readonly ObjectId CodeUtils = new(59);
 
     public static readonly ObjectId MailPlayer = new(40);

@@ -240,6 +240,9 @@ public sealed class MooEvaluator {
             case IndexExpressionNode indexExpr:
                 return await EvaluateIndexAsync(indexExpr);
 
+            case SliceAssignmentExpressionNode sliceAssign:
+                return await EvaluateSliceAssignmentAsync(sliceAssign);
+
             case SliceExpressionNode sliceExpr:
                 return await EvaluateSliceAsync(sliceExpr);
 
@@ -432,6 +435,28 @@ public sealed class MooEvaluator {
         }
 
         throw MooError(MooErrorCode.E_TYPE, "Index operator requires a list or string.");
+    }
+
+    private async Task<MooValue?> EvaluateSliceAssignmentAsync(
+        SliceAssignmentExpressionNode assignment) {
+
+        var target = await EvaluateExpressionAsync(assignment.Target) ?? MooValue.NothingValue;
+        var from = await EvaluateExpressionAsync(assignment.From) ?? MooValue.NothingValue;
+        var to = await EvaluateExpressionAsync(assignment.To) ?? MooValue.NothingValue;
+        var value = await EvaluateExpressionAsync(assignment.Value) ?? MooValue.NothingValue;
+
+        if (from is not MooValue.Integer fromIndex || to is not MooValue.Integer toIndex)
+            throw MooError(MooErrorCode.E_TYPE, "Slice assignment indexes must be integers.");
+
+        var updatedTarget = AssignSliceValue(
+            target,
+            (int)fromIndex.Value,
+            (int)toIndex.Value,
+            value);
+
+        await WriteAssignableTargetAsync(assignment.Target, updatedTarget);
+
+        return value;
     }
 
     private async Task<MooValue?> EvaluateSliceAsync(SliceExpressionNode sliceExpr) {
@@ -1412,4 +1437,53 @@ public sealed class MooEvaluator {
         MooValue.Error e => e.Code == actualCode,
         _ => false
     };
+
+    private static MooValue AssignSliceValue(MooValue target, int start, int end, MooValue value) {
+        if (target is MooValue.String str) {
+            if (value is not MooValue.String replacement)
+                throw MooError(MooErrorCode.E_TYPE, "String slice assignment requires a string value.");
+
+            if (start < 1 || start > str.Value.Length + 1)
+                throw MooError(MooErrorCode.E_RANGE,
+                    $"String slice assignment start {start} out of range (length {str.Value.Length}).");
+
+            if (end < 0 || end > str.Value.Length)
+                throw MooError(MooErrorCode.E_RANGE,
+                    $"String slice assignment end {end} out of range (length {str.Value.Length}).");
+
+            var prefix = str.Value[..(start - 1)];
+            var suffix = end < start
+                ? str.Value[(start - 1)..]
+                : str.Value[end..];
+
+            return new MooValue.String(prefix + replacement.Value + suffix);
+        }
+
+        if (target is MooValue.List list) {
+            if (value is not MooValue.List replacement)
+                throw MooError(MooErrorCode.E_TYPE, "List slice assignment requires a list value.");
+
+            if (start < 1 || start > list.Items.Count + 1)
+                throw MooError(MooErrorCode.E_RANGE,
+                    $"List slice assignment start {start} out of range (length {list.Items.Count}).");
+
+            if (end < 0 || end > list.Items.Count)
+                throw MooError(MooErrorCode.E_RANGE,
+                    $"List slice assignment end {end} out of range (length {list.Items.Count}).");
+
+            var result = new List<MooValue>();
+
+            result.AddRange(list.Items.Take(start - 1));
+            result.AddRange(replacement.Items);
+
+            if (end < start)
+                result.AddRange(list.Items.Skip(start - 1));
+            else
+                result.AddRange(list.Items.Skip(end));
+
+            return new MooValue.List(result);
+        }
+
+        throw MooError(MooErrorCode.E_TYPE, "Slice assignment requires a list or string.");
+    }
 }

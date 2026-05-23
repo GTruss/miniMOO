@@ -21,6 +21,7 @@ public static partial class WorldSeeder {
         Prop(sysObj, "string_utils",   new MooValue.Object(WorldIds.StringUtils));
         Prop(sysObj, "building_utils", new MooValue.Object(WorldIds.BuildingUtils));
         Prop(sysObj, "object_utils",   new MooValue.Object(WorldIds.ObjectUtils));
+        Prop(sysObj, "command_utils",   new MooValue.Object(WorldIds.CommandUtils));
         Prop(sysObj, "list_utils",   new MooValue.Object(WorldIds.ListUtils));
         Prop(sysObj, "code_utils",   new MooValue.Object(WorldIds.CodeUtils));
         Prop(sysObj, "build_options",   new MooValue.Object(WorldIds.BuilderOptions));

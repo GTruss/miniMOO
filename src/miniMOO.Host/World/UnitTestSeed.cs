@@ -111,6 +111,36 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            word = "staff";
+            word[1..1] = "";
+            if (word == "taff")
+              player:tell("PASS: string slice assignment delete");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: string slice assignment delete");
+              failed = failed + 1;
+            endif
+
+            word = "stff";
+            word[3..2] = "a";
+            if (word == "staff")
+              player:tell("PASS: string slice assignment insert");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: string slice assignment insert");
+              failed = failed + 1;
+            endif
+
+            items = {"a", "x", "d"};
+            items[2..2] = {"b", "c"};
+            if (length(items) == 4 && items[2] == "b" && items[3] == "c")
+              player:tell("PASS: list slice assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: list slice assignment");
+              failed = failed + 1;
+            endif
+
             items = {"a", "b", "c"};
             items[2] = "B";
             if (items[1] == "a" && items[2] == "B" && items[3] == "c")
