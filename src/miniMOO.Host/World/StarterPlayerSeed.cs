@@ -17,19 +17,4 @@ public static partial class WorldSeeder {
         Prop(staff, "description", "A twisted length of dark wood, warm to the touch.");
         repo.Add(staff);
     }
-
-    private static void AddPlayerVerbs(MooObject player) {
-        player.Verbs.Add(BuiltinVerb(["@ways"], "ways"));
-
-        player.Verbs.Add(ScriptVerb(["wave"], """
-            player:tell("You wave.");
-            player.location:announce(player.name, " waves.");
-        """));
-
-        player.Verbs.Add(ScriptVerb(["list inventory", "i"], """
-            for obj in (player.contents)
-              player:tell(obj.name);
-            endfor
-        """));
-    }
 }

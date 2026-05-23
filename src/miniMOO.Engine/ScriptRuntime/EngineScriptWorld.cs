@@ -3,6 +3,7 @@ using miniMOO.Core.Things;
 using miniMOO.Engine.Parser;
 using miniMOO.Engine.Repositories;
 using miniMOO.Engine.Services;
+using miniMOO.Script.Evaluation;
 
 namespace miniMOO.Engine.ScriptRuntime;
 
@@ -92,7 +93,13 @@ public sealed class EngineScriptWorld : IScriptWorld {
             Meter = callerContext.Meter,
         };
 
-        return await _scriptRuntime.ExecuteAsync(context, mooVerb.Implementation);
+        var result = await _scriptRuntime.ExecuteAsync(context, mooVerb.Implementation);
+
+        if (!result.IsSuccess)
+            return ScriptResult.Failure(
+                $"{definingId}:{string.Join("/", mooVerb.Names)} called as {thisId}:{verb}\n{result.Error}");
+
+        return result;
     }
 
     public IReadOnlyList<ObjectId> GetChildren(ObjectId parentId) 
@@ -114,11 +121,25 @@ public sealed class EngineScriptWorld : IScriptWorld {
         return newId;
     }
 
-    public void MoveObject(ObjectId objId, ObjectId destId) {
+    public async Task MoveObjectAsync(ScriptContext context, ObjectId objId, ObjectId destId) {
         var obj = _objects.Get(objId)
-            ?? throw new InvalidOperationException($"Object {objId} not found.");
+            ?? throw new MooScriptException(MooErrorCode.E_INVARG, $"Object {objId} not found.");
 
-        obj.LocationId = destId;
+        if (destId.Value >= 0 && _objects.Get(destId) is null)
+            throw new MooScriptException(MooErrorCode.E_INVARG, $"Destination {destId} not found.");
+
+        if (WouldContain(objId, destId))
+            throw new MooScriptException(MooErrorCode.E_RECMOVE, "Recursive move.");
+
+        var oldLocationId = obj.LocationId;
+
+        obj.LocationId = destId.Value >= 0 ? destId : null;
+
+        if (oldLocationId is { } oldLoc)
+            await TryInvokeMovementHookAsync(context, oldLoc, "exitfunc", objId);
+
+        if (destId.Value >= 0)
+            await TryInvokeMovementHookAsync(context, destId, "enterfunc", objId);
     }
 
     public void SetObjectName(ObjectId objId, string name) {
@@ -177,5 +198,42 @@ public sealed class EngineScriptWorld : IScriptWorld {
         new MooValue.Integer((int)verb.Flags),
         new MooValue.String(string.Join(" ", verb.Names))
         ]);
+    }
+
+    private bool WouldContain(ObjectId objId, ObjectId destId) {
+        var current = destId;
+
+        while (current.Value >= 0) {
+            if (current == objId)
+                return true;
+
+            var container = _objects.Get(current);
+            if (container?.LocationId is not { } next)
+                return false;
+
+            current = next;
+        }
+
+        return false;
+    }
+
+    private async Task TryInvokeMovementHookAsync(
+        ScriptContext context,
+        ObjectId targetId,
+        string verbName,
+        ObjectId movedObjectId) {
+
+        var result = await InvokeVerbAsync(
+            context,
+            targetId,
+            verbName,
+            [new MooValue.Object(movedObjectId)]);
+
+        // For now, missing hooks are normal.
+        if (!result.IsSuccess && result.Error?.Contains("Verb not found", StringComparison.OrdinalIgnoreCase) == true)
+            return;
+
+        if (!result.IsSuccess)
+            throw new MooEvaluationException(result.Error ?? $"{verbName} failed.");
     }
 }

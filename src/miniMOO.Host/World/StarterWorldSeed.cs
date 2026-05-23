@@ -22,7 +22,7 @@ public static partial class WorldSeeder {
 
         var exitEast = Exit(WorldIds.ExitEast, WorldIds.Foyer, WorldIds.Library, "east", "e");
         Prop(exitEast, "description", "The world shimmers around you.");
-        Prop(exitEast, "obvious", new MooValue.Integer(0));
+        //Prop(exitEast, "obvious", new MooValue.Integer(0));
         repo.Add(exitEast);
 
         var exitWest = Exit(WorldIds.ExitWest, WorldIds.Library, WorldIds.Foyer, "west", "w");
@@ -54,7 +54,9 @@ public static partial class WorldSeeder {
         Prop(exit, "source", new MooValue.Object(sourceId));
         Prop(exit, "destination", new MooValue.Object(destId));
 
-        exit.Verbs.Add(BuiltinVerb(["go", primaryName, alias], "go"));
+        exit.Verbs.Add(ScriptVerb([primaryName, alias], """
+            this:invoke();
+        """));
 
         return exit;
     }

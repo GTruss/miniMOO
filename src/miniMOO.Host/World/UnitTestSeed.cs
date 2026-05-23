@@ -73,12 +73,57 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            removed = setremove({1, 2, 3}, 2);
+            if (length(removed) == 2 && removed[1] == 1 && removed[2] == 3)
+              player:tell("PASS: setremove()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: setremove()");
+              failed = failed + 1;
+            endif
+
+            removed = setremove({1, 2, 3}, 4);
+            if (length(removed) == 3 && removed[1] == 1 && removed[2] == 2 && removed[3] == 3)
+              player:tell("PASS: setremove() missing value");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: setremove() missing value");
+              failed = failed + 1;
+            endif
+
+            removed = setremove({1, 2, 3, 2}, 2);
+            if (length(removed) == 3 && removed[1] == 1 && removed[2] == 3 && removed[3] == 2)
+              player:tell("PASS: setremove() removes first match");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: setremove() removes first match");
+              failed = failed + 1;
+            endif
+
+            m = rmatch("foobar", "o*b");
+            if (m[1] == 4 && m[2] == 4)
+              player:tell("PASS: rmatch()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: rmatch()");
+              failed = failed + 1;
+            endif
+
             result = listappend({"a"}, "a");
             if (length(result) == 2 && result[2] == "a")
               player:tell("PASS: listappend()");
               passed = passed + 1;
             else
               player:tell("FAIL: listappend()");
+              failed = failed + 1;
+            endif
+
+            deleted = listdelete({"north", "east", "south"}, 2);
+            if (length(deleted) == 2 && deleted[1] == "north" && deleted[2] == "south")
+              player:tell("PASS: listdelete()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: listdelete()");
               failed = failed + 1;
             endif
 
@@ -295,6 +340,71 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: eval() verb call");
+              failed = failed + 1;
+            endif
+
+            test_obj = create($thing);
+            move(test_obj, player);
+
+            if (test_obj.location == player)
+              player:tell("PASS: move() changes location");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: move() changes location");
+              failed = failed + 1;
+            endif
+
+            move(test_obj, here);
+
+            if (test_obj.location == here && test_obj in here.contents)
+              player:tell("PASS: move() updates contents view");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: move() updates contents view");
+              failed = failed + 1;
+            endif
+
+            try
+              move(here, test_obj);
+              player:tell("FAIL: move() prevents recursive containment");
+              failed = failed + 1;
+            except (E_RECMOVE)
+              player:tell("PASS: move() prevents recursive containment");
+              passed = passed + 1;
+            endtry
+
+            move(test_obj, $nothing);
+            if (test_obj.location == $nothing)
+              player:tell("PASS: move() to $nothing");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: move() to $nothing");
+              failed = failed + 1;
+            endif
+
+            if (is_player(player) && !is_player($room))
+              player:tell("PASS: is_player()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: is_player()");
+              failed = failed + 1;
+            endif
+
+            ternary = 1 ? "yes" | "no";
+            if (ternary == "yes")
+              player:tell("PASS: ternary true branch");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: ternary true branch");
+              failed = failed + 1;
+            endif
+
+            ternary = 0 ? "yes" | "no";
+            if (ternary == "no")
+              player:tell("PASS: ternary false branch");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: ternary false branch");
               failed = failed + 1;
             endif
 

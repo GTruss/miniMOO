@@ -190,7 +190,7 @@ public sealed class MooParser {
             _position = saved;
         }
 
-        var expr = ParseOr();
+        var expr = ParseConditional();
 
         // Property assignment: obj.prop = value
         if (expr is PropertyAccessExpressionNode propAccess && Match(TokenKind.Equal))
@@ -240,6 +240,19 @@ public sealed class MooParser {
 
         Consume(TokenKind.RightBrace, "Expected '}' after destructuring assignment.");
         return slots;
+    }
+
+    private ExpressionNode ParseConditional() {
+        var condition = ParseOr();
+
+        if (!Match(TokenKind.Question))
+            return condition;
+
+        var trueExpr = ParseExpression();
+        Consume(TokenKind.Pipe, "Expected '|' in conditional expression.");
+        var falseExpr = ParseConditional();
+
+        return new ConditionalExpressionNode(condition, trueExpr, falseExpr);
     }
 
     private ExpressionNode ParseOr() {

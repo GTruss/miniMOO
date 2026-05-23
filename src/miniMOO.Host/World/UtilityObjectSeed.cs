@@ -37,8 +37,7 @@ public static partial class WorldSeeder {
               endif
             endwhile
             return result;
-        """));
-
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         su.Verbs.Add(ScriptVerb(["english_list"], """
             {things, ?nothingstr = "nothing", ?andstr = " and ", ?commastr = ", ", ?finalcommastr = ","} = args;
@@ -59,10 +58,25 @@ public static partial class WorldSeeder {
               endfor
               return tostr(ret, andstr, things[nthings]);
             endif
-        """));
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["regexp_quote"], """
+            string = tostr(args[1]);
+            quoted = "";
+            while (m = rmatch(string, "[][$^.*+?%].*"))
+              quoted = "%" + substr(string, m[1], m[2] - m[1] + 1) + quoted;
+              string = substr(string, 1, m[1] - 1);
+            endwhile
+            return string + quoted;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["index_delimited", "index_d"], """
+            pattern = "%(%W%|^%)" + $string_utils:regexp_quote(tostr(args[2])) + "%(%W%|$%)";
+            return (m = match(tostr(args[1]), pattern)) ? m[3][1][2] + 1 | 0;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         repo.Add(su);
-    }
+    } 
 
     // ── $building_utils (#21) ─────────────────────────────────────
 
@@ -125,7 +139,7 @@ public static partial class WorldSeeder {
             if (colon)
               verb_names = substr(verb_names, 1, colon - 1) + "," + substr(verb_names, colon + 1);
             endif
-            add_verb(exit_obj, verb_names, "move(player, this.destination); player.location:look_self();");
+            add_verb(exit_obj, verb_names, "this:invoke();");
             player:tell("Exit ", exit_obj.name, " (", exit_obj, ") to ", dest.name, " (", dest, ") created.");
             return exit_obj;
         """));

@@ -123,3 +123,8 @@ public sealed record BacktickExpressionNode(
     IReadOnlyList<ExpressionNode> ErrorCodes,
     ExpressionNode DefaultValue) : ExpressionNode;
 
+public sealed record ConditionalExpressionNode(
+    ExpressionNode Condition,
+    ExpressionNode TrueExpression,
+    ExpressionNode FalseExpression) : ExpressionNode;
+

@@ -61,8 +61,7 @@ public sealed class MooLexer {
 
             '|' => Match('|')
                 ? Make(TokenKind.PipePipe, start, line, column)
-                : throw new MooLexException(
-                    $"Unexpected character '|' at line {line}, column {column}. Did you mean '||'?"),
+                : Make(TokenKind.Pipe, start, line, column),
 
             '+' => Make(TokenKind.Plus, start, line, column),
             '-' => Make(TokenKind.Minus, start, line, column),

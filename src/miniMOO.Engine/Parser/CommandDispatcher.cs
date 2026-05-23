@@ -1,6 +1,5 @@
 using miniMOO.Core.ScriptRuntime;
 using miniMOO.Core.Things;
-using miniMOO.Engine.BuiltinVerbs;
 using miniMOO.Engine.Repositories;
 using miniMOO.Engine.Services;
 using miniMOO.Engine.Verbs;
@@ -11,7 +10,6 @@ public sealed class CommandDispatcher {
     private readonly record struct ResolvedVerb(ObjectId ThisId, MooVerb Verb);
 
     private readonly IObjectRepository _objects;
-    private readonly BuiltinVerbRegistry _builtins;
     private readonly OutputService _output;
     private readonly PermissionService _permission;
     private readonly IScriptRuntime _scripts;
@@ -20,7 +18,6 @@ public sealed class CommandDispatcher {
 
     public CommandDispatcher(
         IObjectRepository objects,
-        BuiltinVerbRegistry builtins,
         OutputService output,
         PermissionService permission,
         IScriptRuntime scripts,
@@ -28,7 +25,6 @@ public sealed class CommandDispatcher {
         IObjectResolver resolver) {
 
         _objects = objects;
-        _builtins = builtins;
         _output = output;
         _permission = permission;
         _scripts = scripts;
@@ -66,16 +62,7 @@ public sealed class CommandDispatcher {
             Resolver = _resolver
         };
 
-        var result = verb.ImplementationKind switch {
-            VerbImplementationKind.Builtin =>
-                ExecuteBuiltin(context, verb),
-
-            VerbImplementationKind.Script =>
-                ExecuteScript(playerId, thisId, command, verb),
-
-            _ =>
-                VerbResult.Failure("Unknown verb implementation.")
-        };
+        var result = ExecuteScript(playerId, thisId, command, verb);
 
         if (!result.IsSuccess && !string.IsNullOrWhiteSpace(result.Message))
             _output.Notify(playerId, result.Message);
@@ -121,15 +108,6 @@ public sealed class CommandDispatcher {
 
         verb = null!;
         return false;
-    }
-
-    private VerbResult ExecuteBuiltin(VerbContext context, MooVerb verb) {
-        var builtin = _builtins.Find(verb.Implementation);
-
-        if (builtin is null)
-            return VerbResult.Failure($"Builtin verb not found: {verb.Implementation}");
-
-        return builtin.ExecuteAsync(context).GetAwaiter().GetResult();
     }
 
     private VerbResult ExecuteScript(ObjectId playerId, ObjectId thisId, ParsedCommand command, MooVerb verb) {
