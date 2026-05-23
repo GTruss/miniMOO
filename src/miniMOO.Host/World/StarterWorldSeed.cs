@@ -48,12 +48,12 @@ public static partial class WorldSeeder {
     }
 
     private static MooObject Exit(ObjectId id, ObjectId sourceId, ObjectId destId, string primaryName, string alias) {
-        var exit = Obj(id, ObjectId.System, WorldIds.Exit, sourceId, primaryName);
+        var exit = Obj(id, ObjectId.System, WorldIds.Exit, null, primaryName);
         exit.Aliases.Add(primaryName);
         exit.Aliases.Add(alias);
 
         Prop(exit, "source", new MooValue.Object(sourceId));
-        Prop(exit, "destination", new MooValue.Object(destId));
+        Prop(exit, "dest", new MooValue.Object(destId));
 
         exit.Verbs.Add(ScriptVerb([primaryName, alias], """
             this:invoke();

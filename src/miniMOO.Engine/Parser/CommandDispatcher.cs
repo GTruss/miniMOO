@@ -76,6 +76,15 @@ public sealed class CommandDispatcher {
             if (TryFindVerbOn(locationId, command.Verb, command, out var locationVerb))
                 return new ResolvedVerb(locationId, locationVerb);
 
+            foreach (var exitId in ExitIdsOf(locationId)) {
+                if (TryFindVerbOn(exitId, command.Verb, command, out var exitVerb))
+                    return new ResolvedVerb(exitId, exitVerb);
+
+                if (ExitMatchesCommand(exitId, command.Verb) &&
+                    TryFindVerbByNameIgnoringSpec(exitId, "invoke", out var invokeVerb))
+                    return new ResolvedVerb(exitId, invokeVerb);
+            }
+
             foreach (var obj in _objects.ContentsOf(locationId)) {
                 if (TryFindVerbOn(obj.Id, command.Verb, command, out var contentsVerb))
                     return new ResolvedVerb(obj.Id, contentsVerb);
@@ -131,13 +140,24 @@ public sealed class CommandDispatcher {
             .GetAwaiter()
             .GetResult();
 
-        var message = result.Error ?? "Script failed.";
-        var frame = $"... (cmd) {thisId}:{string.Join("/", verb.Names)} called as {thisId}:{command.Verb}";
+        if (result.IsSuccess)
+            return VerbResult.Success(result.Value);
 
+        var error = result.ErrorDetail;
 
-        return result.IsSuccess
-            ? VerbResult.Success(result.Value)
-            : VerbResult.Failure(AppendTraceFrame(message, frame));
+        if (error is not null && error.SourceLabel != CurrentCommandSourceLabel(thisId, command.Verb)) {
+            var framed = result.WithFrame(new ScriptTraceFrame(
+                thisId,
+                thisId,
+                command.Verb,
+                null,
+                $"... (cmd) {thisId}:{string.Join("/", verb.Names)} (this == {thisId})"));
+
+            return VerbResult.Failure(framed.Error ?? "Script failed.");
+        }
+
+        return VerbResult.Failure(result.Error ?? "Script failed.");
+
     }
 
     private static bool SpecMatches(MooVerb verb, ParsedCommand command, ObjectId thisId) {
@@ -167,13 +187,42 @@ public sealed class CommandDispatcher {
         return true;
     }
 
-    private static string AppendTraceFrame(string message, string frame) {
-        const string end = "(End of traceback)";
+    private IEnumerable<ObjectId> ExitIdsOf(ObjectId roomId) {
+        if (_resolver.FindPropertyValue(roomId, "exits") is not MooValue.List exits)
+            yield break;
 
-        var marker = message.LastIndexOf(end, StringComparison.Ordinal);
-        if (marker < 0)
-            return frame + Environment.NewLine + message;
-
-        return message.Insert(marker, frame + Environment.NewLine);
+        foreach (var item in exits.Items) {
+            if (item is MooValue.Object obj && _objects.Exists(obj.Value))
+                yield return obj.Value;
+        }
     }
+
+    private bool ExitMatchesCommand(ObjectId exitId, string commandName) {
+        var exit = _objects.Get(exitId);
+        if (exit is null)
+            return false;
+
+        if (string.Equals(exit.Name, commandName, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return exit.Aliases.Any(alias =>
+            string.Equals(alias, commandName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool TryFindVerbByNameIgnoringSpec(ObjectId startId, string name, out MooVerb verb) {
+        foreach (var obj in _resolver.SelfAndAncestors(startId)) {
+            var found = obj.Verbs.FirstOrDefault(v => v.MatchesName(name));
+
+            if (found is not null) {
+                verb = found;
+                return true;
+            }
+        }
+
+        verb = null!;
+        return false;
+    }
+
+    private static string CurrentCommandSourceLabel(ObjectId thisId, string verb)
+        => $"{thisId}:{verb}";
 }

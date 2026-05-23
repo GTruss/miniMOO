@@ -204,6 +204,12 @@ public sealed class MooParser {
             return new PropertyAssignmentExpressionNode(
                 propAccess.Target, propAccess.PropertyName, ParseAssignment());
 
+        if (expr is DynamicPropertyAccessExpressionNode dynPropAccess && Match(TokenKind.Equal))
+            return new DynamicPropertyAssignmentExpressionNode(
+                dynPropAccess.Target,
+                dynPropAccess.PropertyName,
+                ParseAssignment());
+
         return expr;
     }
 
@@ -400,6 +406,21 @@ public sealed class MooParser {
 
         while (true) {
             if (Match(TokenKind.Dot)) {
+                if (Match(TokenKind.LeftParen)) {
+                    var line = Previous().Line;
+                    var column = Previous().Column;
+                    var propertyExpr = ParseExpression();
+                    Consume(TokenKind.RightParen, "Expected ')' after dynamic property name.");
+
+                    expression = new DynamicPropertyAccessExpressionNode(
+                        expression,
+                        propertyExpr,
+                        line,
+                        column);
+
+                    continue;
+                }
+
                 var property = Consume(TokenKind.Identifier, "Expected property name after '.'.");
                 expression = new PropertyAccessExpressionNode(
                     expression,
@@ -484,6 +505,9 @@ public sealed class MooParser {
             Consume(TokenKind.RightBrace, "Expected '}' after list.");
             return new ListLiteralExpressionNode(items);
         }
+
+        if (Match(TokenKind.Dollar))
+            return new LastIndexExpressionNode();
 
         if (Match(TokenKind.DollarIdentifier)) {
             // $wiz desugars to #0.wiz at parse time — faithful to LambdaMOO

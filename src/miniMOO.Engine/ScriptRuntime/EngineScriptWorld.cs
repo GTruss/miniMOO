@@ -97,9 +97,14 @@ public sealed class EngineScriptWorld : IScriptWorld {
 
         if (!result.IsSuccess) {
             var message = result.Error ?? "Script failed.";
-            var frame = $"... (eng) {definingId}:{string.Join("/", mooVerb.Names)} called as {thisId}:{verb}";
+            var frame = $"... (eng) {definingId}:{string.Join("/", mooVerb.Names)} (this == {thisId})";
 
-            return ScriptResult.Failure(AppendTraceFrame(message, frame));
+            return result.WithFrame(new ScriptTraceFrame(
+                definingId,
+                thisId,
+                verb,
+           null,
+      $"... (eng) {definingId}:{string.Join("/", mooVerb.Names)} (this == {thisId})"));
         }
         return result;
     }
@@ -154,6 +159,31 @@ public sealed class EngineScriptWorld : IScriptWorld {
     public void SetProperty(ObjectId objId, string propName, MooValue value) {
         var obj = _objects.Get(objId)
             ?? throw new InvalidOperationException($"Object {objId} not found.");
+
+        switch (propName.ToLowerInvariant()) {
+            case "name":
+                if (value is not MooValue.String name)
+                    throw new InvalidOperationException("Object name must be a string.");
+
+                obj.Name = name.Value;
+                return;
+
+            case "aliases":
+                if (value is not MooValue.List aliases)
+                    throw new InvalidOperationException("Object aliases must be a list.");
+
+                obj.Aliases.Clear();
+
+                foreach (var alias in aliases.Items) {
+                    if (alias is not MooValue.String s)
+                        throw new InvalidOperationException("Object aliases must be strings.");
+
+                    if (!obj.Aliases.Contains(s.Value, StringComparer.OrdinalIgnoreCase))
+                        obj.Aliases.Add(s.Value);
+                }
+
+                return;
+        }
 
         obj.Properties[propName] = new MooProperty {
             Name = propName,
@@ -237,15 +267,5 @@ public sealed class EngineScriptWorld : IScriptWorld {
 
         if (!result.IsSuccess)
             throw new MooEvaluationException(result.Error ?? $"{verbName} failed.");
-    }
-
-    private static string AppendTraceFrame(string message, string frame) {
-        const string end = "(End of traceback)";
-
-        var marker = message.LastIndexOf(end, StringComparison.Ordinal);
-        if (marker < 0)
-            return frame + Environment.NewLine + message;
-
-        return message.Insert(marker, frame + Environment.NewLine);
     }
 }

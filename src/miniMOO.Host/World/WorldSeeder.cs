@@ -48,6 +48,7 @@ public static partial class WorldSeeder {
     public static readonly ObjectId GenProgId = WorldIds.Prog;
     public static readonly ObjectId GenMailPlayerId = WorldIds.MailPlayer;
     public static readonly ObjectId GenFrandsPlayerClassId = WorldIds.FrandsPlayerClass;
+    public static readonly ObjectId GenBuilderOptionsId = WorldIds.BuilderOptions;
 
     public static readonly ObjectId FoyerId = WorldIds.Foyer;
     public static readonly ObjectId LibraryId = WorldIds.Library;

@@ -10,6 +10,11 @@ namespace miniMOO.Script.Runtimes;
 public sealed class TinyScriptRuntime : IScriptRuntime {
     //private readonly Dictionary<string, ProgramNode> _cache = new();
 
+    private static string SourceLabel(ScriptContext context)
+        => context.DefiningObjectId is { } defining
+            ? $"{defining}:{context.Verb}"
+            : $"{context.ThisId}:{context.Verb}";
+
     public async Task<ScriptResult> ExecuteAsync(ScriptContext context, string script) {
         try {
 
@@ -28,57 +33,40 @@ public sealed class TinyScriptRuntime : IScriptRuntime {
             return await new MooEvaluator(context).ExecuteAsync(program);
         }
         catch (MooLexException ex) when (ex.Line > 0) {
-            return ScriptResult.Failure(FormatSourceError(script, ex.Line, ex.Column, ex.Message));
+            return ScriptResult.Failure(new ScriptError(
+                ex.Message,
+                Line: ex.Line,
+                Column: ex.Column,
+                SourceText: script,            
+                SourceLabel: SourceLabel(context)));
         }
         catch (MooLexException ex) {
             return ScriptResult.Failure(ex.Message);
         }
         catch (MooParseException ex) {
-            return ScriptResult.Failure(FormatSourceError(script, ex.Token.Line, ex.Token.Column, ex.Message));
+            return ScriptResult.Failure(new ScriptError(
+                ex.Message,
+                Line: ex.Token.Line,
+                Column: ex.Token.Column,
+                SourceText: script,
+                SourceLabel: SourceLabel(context)));
         }
         catch (MooEvaluationException ex) {
             return ScriptResult.Failure(ex.Message);
         }
         catch (MooScriptException ex) {
-            return ScriptResult.Failure(FormatScriptError(script, ex));
+            return ScriptResult.Failure(new ScriptError(
+                ex.Message,
+                ErrorCode: ex.ErrorCode,
+                Line: ex.Line,
+                Column: ex.Column,
+                SourceText: ex.SourceText ?? script,
+                SourceLabel: ex.SourceLabel ?? SourceLabel(context),
+                Trace: ex.Trace));
         }
     } 
+
     private static bool IsDebugEnabled(ScriptContext context)
         => context.World.GetProperty(context.PlayerId, "debug") is MooValue.Integer i
         && i.Value == 1;
-
-    private static string FormatSourceError(string script, int line, int column, string message) {
-        var lines = script.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
-
-        if (line < 1 || line > lines.Length)
-            return message;
-
-        var sourceLine = lines[line - 1];
-        var caretColumn = Math.Max(1, column);
-
-        return string.Join(Environment.NewLine, [
-            message,
-        $"{line,4}: {sourceLine}",
-        $"      {new string(' ', caretColumn - 1)}^"
-        ]);
-    }
-
-    private static string FormatScriptError(string script, MooScriptException ex) {
-        var sourceText = ex.SourceText ?? script;
-
-        var message = ex.Line is not null && ex.Column is not null
-            ? FormatSourceError(sourceText, ex.Line.Value, ex.Column.Value, ex.Message)
-            : ex.Message;
-
-        if (ex.Trace.Count == 0)
-            return message;
-
-        var lines = new List<string> { message };
-
-        foreach (var frame in ex.Trace)
-            lines.Add(frame.Description);
-
-        lines.Add("(End of traceback)");
-        return string.Join(Environment.NewLine, lines);
-    }
 }

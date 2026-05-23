@@ -15,6 +15,8 @@ public static partial class WorldSeeder {
         AddNote(repo);
         AddProgrammer(repo);
         AddWizardPrototype(repo);
+        AddGenericOptionsPrototype(repo);
+        AddBuildOptionsPrototype(repo);
         AddMailPlayer(repo);
         AddFrandsPlayerClass(repo);
     }
@@ -61,6 +63,14 @@ public static partial class WorldSeeder {
         Prop(genRoom, "exits", new MooValue.List([]));
         Prop(genRoom, "entrances", new MooValue.List([]));
         Prop(genRoom, "ctype", 1);
+
+        genRoom.Verbs.Add(ScriptVerb(["add_exit"], """
+            return `this.exits = setadd(this.exits, args[1]) ! E_PERM => E_NONE' != E_PERM;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genRoom.Verbs.Add(ScriptVerb(["add_entrance"], """
+            return `this.entrances = setadd(this.entrances, args[1]) ! E_PERM => E_NONE' != E_PERM;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         genRoom.Verbs.Add(ScriptVerb(["contents"], """
             return this.contents;
@@ -132,14 +142,9 @@ public static partial class WorldSeeder {
 
             things = {};
             players = {};
-            exits = {};
 
             for obj in (contents)
-              if (valid(obj.destination))
-                if (obj.obvious)
-                  exits = setadd(exits, obj);
-                endif
-              elseif (is_player(obj))
+              if (is_player(obj))
                 players = setadd(players, obj);
               else
                 things = setadd(things, obj);
@@ -327,18 +332,18 @@ public static partial class WorldSeeder {
             what = args[1];
             unlocked = this:is_unlocked_for(what);
             if (unlocked)
-              this.destination.blessed_object = what;
+              this.dest.blessed_object = what;
             endif
             if (unlocked)
               start = what.location;
               if (msg = this:leave_msg(what))
                 what:tell_lines(msg);
               endif
-              what:moveto(this.destination);
+              what:moveto(this.dest);
               if (what.location != start)
                 this:announce_msg(start, what, this:oleave_msg(what) || this:defaulting_oleave_msg(what) || "has left.");
               endif
-              if (what.location == this.destination)
+              if (what.location == this.dest)
 
                 if (what == player)
                   what.location:look_brief();
@@ -426,6 +431,19 @@ public static partial class WorldSeeder {
     private static void AddBuilder(InMemoryObjectRepository repo) {
         var genBuilder = Obj(WorldIds.Builder, ObjectId.System, WorldIds.FrandsPlayerClass, null, "$builder");
         genBuilder.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+        Prop(genBuilder, "build_options", new MooValue.List([]));
+
+        genBuilder.Verbs.Add(ScriptVerb(["@buildtest"], """
+            return $build_options:get(this.build_options, args[1]);
+        """, VerbObjectSpec.Any));
+
+        genBuilder.Verbs.Add(ScriptVerb(["build_option"], """
+            return $build_options:get(this.build_options, args[1]);
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genBuilder.Verbs.Add(ScriptVerb(["_create"], """
+            return `create(@args) ! ANY => E_NONE';
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         genBuilder.Verbs.Add(ScriptVerb(["@create"], """
             parent = dobj;
@@ -441,14 +459,24 @@ public static partial class WorldSeeder {
             player:tell("You now have ", newobj.name, " with object number ", newobj, " and parent ", parent.name, " (", parent, ").");
         """, VerbObjectSpec.Any, "any", VerbObjectSpec.Any));
 
-        genBuilder.Verbs.Add(ScriptVerb(["@dig"], """
+        genBuilder.Verbs.Add(ScriptVerb(["@dig2"], """
             if (dobjstr == "")
               player:tell("Usage: @dig <room-name>");
               player:tell("       @dig <exit-spec>[|<return-spec>] to <room-name-or-#id>");
               return;
             endif
+
+            room_kind = player:build_option("dig_room");
+            if (room_kind == 0)
+              room_kind = $room;
+            endif 
+
+            player:tell("Using room prototype ", room_kind, ".");
+
             if (iobjstr == "")
+
               newroom = create($room);
+
               $building_utils:set_names(newroom, dobjstr);
               player:tell("Room ", newroom.name, " (", newroom, ") created.");
             else
@@ -456,7 +484,9 @@ public static partial class WorldSeeder {
                 destroom = iobj;
                 newroom = 0;
               else
+
                 newroom = create($room);
+
                 $building_utils:set_names(newroom, iobjstr);
                 destroom = newroom;
               endif
@@ -467,6 +497,69 @@ public static partial class WorldSeeder {
               $building_utils:make_exit(exits[1], here, destroom);
               if (length(exits) == 2)
                 $building_utils:make_exit(exits[2], destroom, here);
+              endif
+            endif
+        """, VerbObjectSpec.Any, "any", VerbObjectSpec.Any));
+
+        genBuilder.Verbs.Add(ScriptVerb(["@dig"], """
+            nargs = length(args);
+            if (nargs == 1)
+              room = args[1];
+              exit_spec = "";
+            elseif (nargs >= 3 && args[2] == "to")
+              exit_spec = args[1];
+              room = $string_utils:from_list(args[3..$], " ");
+            elseif (argstr && !prepstr)
+              room = argstr;
+              exit_spec = "";
+            else
+              player:notify(tostr("Usage:  ", verb, " <new-room-name>"));
+              player:notify(tostr("    or  ", verb, " <exit-description> to <new-room-name-or-old-room-object-number>"));
+              return;
+            endif
+            if (room != tostr(other_room = toobj(room)))
+              room_kind = player:build_option("dig_room");
+              if (room_kind == 0)
+                room_kind = $room;
+              endif
+              other_room = player:_create(room_kind);
+              if (typeof(other_room) == ERR)
+                player:notify(tostr("Cannot create new room as a child of ", $string_utils:nn(room_kind), ": ", other_room, ".  See `help @build-options' for information on how to specify the kind of room this command tries to create."));
+                return;
+              endif
+              for f in ($string_utils:char_list(player:build_option("create_flags") || ""))
+                other_room.(f) = 1;
+              endfor
+              other_room.name = room;
+              other_room.aliases = {room};
+              move(other_room, $nothing);
+              player:notify(tostr(other_room.name, " (", other_room, ") created."));
+            elseif (nargs == 1)
+              player:notify("You can't dig a room that already exists!");
+              return;
+            elseif (!valid(player.location) || !($room in $object_utils:ancestors(player.location)))
+              player:notify(tostr("You may only use the ", verb, " command from inside a room."));
+              return;
+            elseif (!valid(other_room) || !($room in $object_utils:ancestors(other_room)))
+              player:notify(tostr(other_room, " doesn't look like a room to me..."));
+              return;
+            endif
+            if (exit_spec)
+              exit_kind = player:build_option("dig_exit");
+              if (exit_kind == 0)
+                exit_kind = $exit;
+              endif
+              exits = $string_utils:explode(exit_spec, "|");
+              if (length(exits) < 1 || length(exits) > 2)
+                player:notify("The exit-description must have the form");
+                player:notify("     [name:]alias,...,alias");
+                player:notify("or   [name:]alias,...,alias|[name:]alias,...,alias");
+                return;
+              endif
+              do_recreate = !player:build_option("bi_create");
+              to_ok = $building_utils:make_exit(exits[1], player.location, other_room, do_recreate, exit_kind);
+              if (to_ok && length(exits) == 2)
+                $building_utils:make_exit(exits[2], other_room, player.location, do_recreate, exit_kind);
               endif
             endif
         """, VerbObjectSpec.Any, "any", VerbObjectSpec.Any));
@@ -557,6 +650,32 @@ public static partial class WorldSeeder {
         var genWiz = Obj(WorldIds.Wiz, ObjectId.System, WorldIds.Prog, null, "$wiz");
         genWiz.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
         repo.Add(genWiz);
+    }
+
+    private static void AddGenericOptionsPrototype(InMemoryObjectRepository repo) {
+        var genOptions = Obj(WorldIds.GenericOptionPackage, ObjectId.System, WorldIds.Root, null, "Generic Option Package");
+        genOptions.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+
+
+        genOptions.Verbs.Add(ScriptVerb(["get"], """
+            {options, name} = args;
+            if (name in options)
+              return 1;
+            elseif (a = $list_utils:assoc(name, options))
+              return a[2];
+            else
+              return 0;
+            endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        repo.Add(genOptions);
+    }
+
+    private static void AddBuildOptionsPrototype(InMemoryObjectRepository repo) {
+        var genBuildOptions = Obj(WorldIds.BuilderOptions, ObjectId.System, WorldIds.GenericOptionPackage, null, "$build_options");
+        genBuildOptions.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
+
+        repo.Add(genBuildOptions);
     }
 
     private static void AddMailPlayer(InMemoryObjectRepository repo) {

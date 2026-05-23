@@ -141,3 +141,15 @@ public sealed record ConditionalExpressionNode(
     ExpressionNode TrueExpression,
     ExpressionNode FalseExpression) : ExpressionNode;
 
+public sealed record LastIndexExpressionNode() : ExpressionNode;
+
+public sealed record DynamicPropertyAccessExpressionNode(
+    ExpressionNode Target,
+    ExpressionNode PropertyName,
+    int Line,
+    int Column) : ExpressionNode;
+
+public sealed record DynamicPropertyAssignmentExpressionNode(
+    ExpressionNode Target,
+    ExpressionNode PropertyName,
+    ExpressionNode Value) : ExpressionNode;

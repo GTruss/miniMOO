@@ -52,7 +52,7 @@ public sealed class MooLexer {
                 ? Make(TokenKind.DotDot, start, line, column)
                 : Make(TokenKind.Dot, start, line, column),
             '@' => Make(TokenKind.At, start, line, column),
-            '$' => ReadDollarIdentifier(start, line, column),
+            '$' => ReadDollarOrDollarIdentifier(start, line, column),
 
             '&' => Match('&')
                 ? Make(TokenKind.AmpAmp, start, line, column)
@@ -220,16 +220,15 @@ public sealed class MooLexer {
             $"Unterminated string.", line, column);
     }
 
-    private Token ReadDollarIdentifier(int start, int line, int column) {
+    private Token ReadDollarOrDollarIdentifier(int start, int line, int column) {
         if (IsAtEnd() || !IsIdentifierStart(Current))
-            throw new MooLexException($"Expected identifier after '$'.", line, column);
+            return Make(TokenKind.Dollar, start, line, column);
 
         while (!IsAtEnd() && IsIdentifierPart(Current))
-            Advance(); 
+            Advance();
 
         var text = _source[start.._position];
 
-        // Value carries the name without the '$' (e.g. "wiz" for "$wiz")
         return new Token(TokenKind.DollarIdentifier, text, text[1..], start, line, column);
     }
 

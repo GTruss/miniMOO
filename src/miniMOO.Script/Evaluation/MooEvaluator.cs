@@ -14,20 +14,13 @@ internal sealed class MooReturnException : Exception {
     public MooReturnException(MooValue? value) : base("Script return") => Value = value;
 }
 
-public sealed record MooTraceFrame(
-    ObjectId ThisId,
-    ObjectId? DefiningObjectId,
-    string Verb,
-    int? Line,
-    string Description);
-
 public sealed class MooScriptException : Exception {
     public int ErrorCode { get; }
     public int? Line { get; }
     public int? Column { get; }
+    public List<ScriptTraceFrame> Trace { get; } = [];
     public string? SourceText { get; set; }
     public string? SourceLabel { get; set; }
-    public List<MooTraceFrame> Trace { get; } = [];
 
     public MooScriptException(int code, string message, int? line = null, int? column = null)
         : base(message) {
@@ -35,11 +28,22 @@ public sealed class MooScriptException : Exception {
         Line = line;
         Column = column;
     }
+
+    public MooScriptException(ScriptError error)
+        : base(error.Message) {
+            ErrorCode = error.ErrorCode ?? MooErrorCode.E_NONE;
+            Line = error.Line;
+            Column = error.Column;
+            SourceText = error.SourceText;
+            SourceLabel = error.SourceLabel;
+            Trace.AddRange(error.Frames);
+    }
 }
 
 public sealed class MooEvaluator {
     private readonly ScriptContext _context;
     private readonly Dictionary<string, MooValue> _locals = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Stack<int> _indexLengths = new();
 
     public MooEvaluator(ScriptContext context) {
         _context = context;
@@ -123,8 +127,8 @@ public sealed class MooEvaluator {
         var iterable = await EvaluateExpressionAsync(forStmt.Iterable);
 
         if (iterable is not MooValue.List list)
-            throw new MooEvaluationException(
-                $"'for' requires a list, got {iterable?.GetType().Name ?? "nothing"}.");
+                throw MooError(MooErrorCode.E_TYPE,
+                    $"'for' requires a list, got {iterable?.GetType().Name ?? "nothing"}.");
 
         MooValue? result = null;
 
@@ -142,7 +146,7 @@ public sealed class MooEvaluator {
         var toVal = await EvaluateExpressionAsync(rangeFor.To);
 
         if (fromVal is not MooValue.Integer fromInt || toVal is not MooValue.Integer toInt)
-            throw new MooEvaluationException("Range bounds must be integers.");
+            throw MooError(MooErrorCode.E_TYPE, "Range bounds must be integers.");
 
         MooValue? result = null;
         for (var i = fromInt.Value; i <= toInt.Value; i++) {
@@ -173,8 +177,7 @@ public sealed class MooEvaluator {
                 var matches = false;
                 foreach (var codeExpr in clause.Codes) {
                     var codeVal = await EvaluateExpressionAsync(codeExpr);
-                    if (codeVal is MooValue.Integer codeInt
-                        && (codeInt.Value == MooErrorCode.Any || codeInt.Value == ex.ErrorCode)) {
+                    if (MatchesErrorCode(codeVal, ex.ErrorCode)) {
                         matches = true;
                         break;
                     }
@@ -184,7 +187,7 @@ public sealed class MooEvaluator {
                 if (!matches) continue;
 
                 if (clause.Variable is not null)
-                    _locals[clause.Variable] = new MooValue.Integer(ex.ErrorCode);
+                    _locals[clause.Variable] = new MooValue.Error(ex.ErrorCode);
 
                 MooValue? result = null;
                 foreach (var stmt in clause.Body)
@@ -228,6 +231,12 @@ public sealed class MooEvaluator {
             case ObjectLiteralExpressionNode literal:
                 return new MooValue.Object(new ObjectId(checked((int)literal.Value)));
 
+            case LastIndexExpressionNode:
+                if (_indexLengths.Count == 0)
+                    throw MooError(MooErrorCode.E_INVIND, "'$' is only valid inside an index or slice.");
+
+                return new MooValue.Integer(_indexLengths.Peek());
+
             case IndexExpressionNode indexExpr:
                 return await EvaluateIndexAsync(indexExpr);
 
@@ -257,6 +266,12 @@ public sealed class MooEvaluator {
 
             case BacktickExpressionNode backtick:
                 return await EvaluateBacktickAsync(backtick);
+
+            case DynamicPropertyAccessExpressionNode property:
+                return await EvaluateDynamicPropertyAccessAsync(property);
+
+            case DynamicPropertyAssignmentExpressionNode propAssign:
+                return await EvaluateDynamicPropertyAssignmentAsync(propAssign);
 
             case SpliceExpressionNode:
                 throw new MooEvaluationException(
@@ -352,65 +367,96 @@ public sealed class MooEvaluator {
                 ? new MooValue.Object(iobjId)
                 : MooValue.NothingValue,
             "here" => _context.World.GetProperty(_context.PlayerId, "location") ?? MooValue.NothingValue,
-            "e_none" => new MooValue.Integer(MooErrorCode.E_NONE),
-            "e_type" => new MooValue.Integer(MooErrorCode.E_TYPE),
-            "e_div" => new MooValue.Integer(MooErrorCode.E_DIV),
-            "e_perm" => new MooValue.Integer(MooErrorCode.E_PERM),
-            "e_propnf" => new MooValue.Integer(MooErrorCode.E_PROPNF),
-            "e_verbnf" => new MooValue.Integer(MooErrorCode.E_VERBNF),
-            "e_varnf" => new MooValue.Integer(MooErrorCode.E_VARNF),
-            "e_invind" => new MooValue.Integer(MooErrorCode.E_INVIND),
-            "e_range" => new MooValue.Integer(MooErrorCode.E_RANGE),
-            "e_args" => new MooValue.Integer(MooErrorCode.E_ARGS),
-            "e_invarg" => new MooValue.Integer(MooErrorCode.E_INVARG),
-            "e_recmove" => new MooValue.Integer(MooErrorCode.E_RECMOVE),
-            "e_maxrec" => new MooValue.Integer(MooErrorCode.E_MAXREC),
-            "e_nacc" => new MooValue.Integer(MooErrorCode.E_NACC),
-            "e_quota" => new MooValue.Integer(MooErrorCode.E_QUOTA),
-            "e_float" => new MooValue.Integer(MooErrorCode.E_FLOAT),
+            "e_none" => new MooValue.Error(MooErrorCode.E_NONE),
+            "e_type" => new MooValue.Error(MooErrorCode.E_TYPE),
+            "e_div" => new MooValue.Error(MooErrorCode.E_DIV),
+            "e_perm" => new MooValue.Error(MooErrorCode.E_PERM),
+            "e_propnf" => new MooValue.Error(MooErrorCode.E_PROPNF),
+            "e_verbnf" => new MooValue.Error(MooErrorCode.E_VERBNF),
+            "e_varnf" => new MooValue.Error(MooErrorCode.E_VARNF),
+            "e_invind" => new MooValue.Error(MooErrorCode.E_INVIND),
+            "e_range" => new MooValue.Error(MooErrorCode.E_RANGE),
+            "e_args" => new MooValue.Error(MooErrorCode.E_ARGS),
+            "e_invarg" => new MooValue.Error(MooErrorCode.E_INVARG),
+            "e_recmove" => new MooValue.Error(MooErrorCode.E_RECMOVE),
+            "e_maxrec" => new MooValue.Error(MooErrorCode.E_MAXREC),
+            "e_nacc" => new MooValue.Error(MooErrorCode.E_NACC),
+            "e_quota" => new MooValue.Error(MooErrorCode.E_QUOTA),
+            "e_float" => new MooValue.Error(MooErrorCode.E_FLOAT),
             "any" => new MooValue.Integer(MooErrorCode.Any),
             "int" => new MooValue.Integer(0),
             "obj" => new MooValue.Integer(1),
             "str" => new MooValue.Integer(2),
+            "err" => new MooValue.Integer(3),
             "list" => new MooValue.Integer(4),
             "float" => new MooValue.Integer(9),
-            _ => throw new MooEvaluationException($"Unknown variable: {identifier.Name}")
+            _ => throw MooError(MooErrorCode.E_VARNF, $"Unknown variable: {identifier.Name}")
         };
     }
 
     private async Task<MooValue?> EvaluateIndexAsync(IndexExpressionNode indexExpr) {
         var target = await EvaluateExpressionAsync(indexExpr.Target) ?? MooValue.NothingValue;
-        var index = await EvaluateExpressionAsync(indexExpr.Index) ?? MooValue.NothingValue;
+
+        var length = target switch {
+            MooValue.List list1 => list1.Items.Count,
+            MooValue.String str1 => str1.Value.Length,
+            _ => throw MooError(MooErrorCode.E_TYPE, "Index operator requires a list or string.")
+        };
+
+        MooValue index;
+        _indexLengths.Push(length);
+        try {
+            index = await EvaluateExpressionAsync(indexExpr.Index) ?? MooValue.NothingValue;
+        }
+        finally {
+            _indexLengths.Pop();
+        }
 
         if (index is not MooValue.Integer idx)
-            throw new MooEvaluationException("Index must be an integer.");
+            throw MooError(MooErrorCode.E_TYPE, "Index must be an integer.");
 
         var i = (int)idx.Value;
 
         if (target is MooValue.List list) {
             if (i < 1 || i > list.Items.Count)
-                throw new MooEvaluationException(
+                throw MooError(MooErrorCode.E_RANGE,
                     $"List index {i} out of range (length {list.Items.Count}).");
             return list.Items[i - 1];
         }
 
         if (target is MooValue.String str) {
             if (i < 1 || i > str.Value.Length)
-                throw new MooEvaluationException(
+                throw MooError(MooErrorCode.E_RANGE,
                     $"String index {i} out of range (length {str.Value.Length}).");
             return new MooValue.String(str.Value[i - 1].ToString());
         }
 
-        throw new MooEvaluationException("Index operator requires a list or string.");
+        throw MooError(MooErrorCode.E_TYPE, "Index operator requires a list or string.");
     }
 
     private async Task<MooValue?> EvaluateSliceAsync(SliceExpressionNode sliceExpr) {
         var target = await EvaluateExpressionAsync(sliceExpr.Target) ?? MooValue.NothingValue;
-        var from = await EvaluateExpressionAsync(sliceExpr.From) ?? MooValue.NothingValue;
-        var to = await EvaluateExpressionAsync(sliceExpr.To) ?? MooValue.NothingValue;
+
+        var length = target switch {
+            MooValue.List list1 => list1.Items.Count,
+            MooValue.String str1 => str1.Value.Length,
+            _ => throw MooError(MooErrorCode.E_TYPE, "Slice operator requires a list or string.")
+        };
+
+        MooValue from;
+        MooValue to;
+
+        _indexLengths.Push(length);
+        try {
+            from = await EvaluateExpressionAsync(sliceExpr.From) ?? MooValue.NothingValue;
+            to = await EvaluateExpressionAsync(sliceExpr.To) ?? MooValue.NothingValue;
+        }
+        finally {
+            _indexLengths.Pop();
+        }
 
         if (from is not MooValue.Integer fromIndex || to is not MooValue.Integer toIndex)
-            throw new MooEvaluationException("Slice indexes must be integers.");
+            throw MooError(MooErrorCode.E_TYPE, "Slice indexes must be integers.");
 
         var start = (int)fromIndex.Value;
         var end = (int)toIndex.Value;
@@ -421,16 +467,16 @@ public sealed class MooEvaluator {
         if (target is MooValue.List list)
             return SliceList(list.Items, start, end);
 
-        throw new MooEvaluationException("Slice operator requires a list or string.");
+        throw MooError(MooErrorCode.E_TYPE, "Slice operator requires a list or string.");
     }
 
     private static MooValue.String SliceString(string value, int start, int end) {
         if (start < 1 || start > value.Length + 1)
-            throw new MooEvaluationException(
+            throw MooError(MooErrorCode.E_RANGE,
                 $"String slice start {start} out of range (length {value.Length}).");
 
         if (end < 0 || end > value.Length)
-            throw new MooEvaluationException(
+            throw MooError(MooErrorCode.E_RANGE,
                 $"String slice end {end} out of range (length {value.Length}).");
 
         if (end < start)
@@ -441,11 +487,11 @@ public sealed class MooEvaluator {
 
     private static MooValue.List SliceList(IReadOnlyList<MooValue> items, int start, int end) {
         if (start < 1 || start > items.Count + 1)
-            throw new MooEvaluationException(
+            throw MooError(MooErrorCode.E_RANGE,
                 $"List slice start {start} out of range (length {items.Count}).");
 
         if (end < 0 || end > items.Count)
-            throw new MooEvaluationException(
+            throw MooError(MooErrorCode.E_RANGE,
                 $"List slice end {end} out of range (length {items.Count}).");
 
         if (end < start)
@@ -459,7 +505,7 @@ public sealed class MooEvaluator {
         var target = await EvaluateExpressionAsync(property.Target);
 
         if (target is not MooValue.Object obj)
-            throw new MooEvaluationException(
+            throw MooError(MooErrorCode.E_TYPE,
                 $"Cannot read property '{property.PropertyName}' from non-object value.");
 
         var value = _context.World.GetProperty(obj.Value, property.PropertyName);
@@ -479,7 +525,7 @@ public sealed class MooEvaluator {
 
         var target = await EvaluateExpressionAsync(propAssign.Target);
         if (target is not MooValue.Object obj)
-            throw new MooEvaluationException($"Cannot write property '{propAssign.PropertyName}' on non-object value.");
+            throw MooError(MooErrorCode.E_TYPE, $"Cannot write property '{propAssign.PropertyName}' on non-object value.");
 
         var value = await EvaluateExpressionAsync(propAssign.Value);
         _context.World.SetProperty(obj.Value, propAssign.PropertyName, value);
@@ -495,7 +541,7 @@ public sealed class MooEvaluator {
         var value = await EvaluateExpressionAsync(assignment.Value) ?? MooValue.NothingValue;
 
         if (index is not MooValue.Integer idx)
-            throw new MooEvaluationException("Indexed assignment requires an integer index.");
+            throw MooError(MooErrorCode.E_TYPE, "Indexed assignment requires an integer index.");
 
         var updatedTarget = AssignIndexedValue(target, (int)idx.Value, value);
         await WriteAssignableTargetAsync(assignment.Target, updatedTarget);
@@ -513,7 +559,7 @@ public sealed class MooEvaluator {
                     var objValue = await EvaluateExpressionAsync(property.Target);
 
                     if (objValue is not MooValue.Object obj)
-                        throw new MooEvaluationException(
+                        throw MooError(MooErrorCode.E_TYPE,
                             $"Cannot write property '{property.PropertyName}' on non-object value.");
 
                     _context.World.SetProperty(obj.Value, property.PropertyName, value);
@@ -525,7 +571,7 @@ public sealed class MooEvaluator {
                     var indexValue = await EvaluateExpressionAsync(index.Index) ?? MooValue.NothingValue;
 
                     if (indexValue is not MooValue.Integer idx)
-                        throw new MooEvaluationException("Indexed assignment requires an integer index.");
+                        throw MooError(MooErrorCode.E_TYPE, "Indexed assignment requires an integer index.");
 
                     var updatedContainer = AssignIndexedValue(container, (int)idx.Value, value);
                     await WriteAssignableTargetAsync(index.Target, updatedContainer);
@@ -533,14 +579,14 @@ public sealed class MooEvaluator {
                 }
 
             default:
-                throw new MooEvaluationException("Invalid indexed assignment target.");
+                throw MooError(MooErrorCode.E_INVARG, "Invalid indexed assignment target.");
         }
     }
 
     private static MooValue AssignIndexedValue(MooValue target, int index, MooValue value) {
         if (target is MooValue.List list) {
             if (index < 1 || index > list.Items.Count)
-                throw new MooEvaluationException(
+                throw MooError(MooErrorCode.E_RANGE,
                     $"List assignment index {index} out of range (length {list.Items.Count}).");
 
             var items = list.Items.ToList();
@@ -550,10 +596,10 @@ public sealed class MooEvaluator {
 
         if (target is MooValue.String str) {
             if (value is not MooValue.String replacement || replacement.Value.Length != 1)
-                throw new MooEvaluationException("String indexed assignment requires a one-character string.");
+                throw MooError(MooErrorCode.E_TYPE, "String indexed assignment requires a one-character string.");
 
             if (index < 1 || index > str.Value.Length)
-                throw new MooEvaluationException(
+                throw MooError(MooErrorCode.E_RANGE,
                     $"String assignment index {index} out of range (length {str.Value.Length}).");
 
             var chars = str.Value.ToCharArray();
@@ -561,14 +607,14 @@ public sealed class MooEvaluator {
             return new MooValue.String(new string(chars));
         }
 
-        throw new MooEvaluationException("Indexed assignment requires a list or string.");
+        throw MooError(MooErrorCode.E_TYPE, "Indexed assignment requires a list or string.");
     }
 
     private async Task<MooValue?> EvaluateDestructuringAsync(DestructuringAssignmentNode destruct) {
         var value = await EvaluateExpressionAsync(destruct.Value) ?? MooValue.NothingValue;
 
         if (value is not MooValue.List list)
-            throw new MooEvaluationException("Destructuring requires a list on the right side.");
+            throw MooError(MooErrorCode.E_TYPE, "Destructuring requires a list on the right side.");
 
         for (var i = 0; i < destruct.Slots.Count; i++) {
             var slot = destruct.Slots[i];
@@ -595,14 +641,18 @@ public sealed class MooEvaluator {
         var target = await EvaluateExpressionAsync(verbCall.Target);
 
         if (target is not MooValue.Object obj)
-            throw new MooEvaluationException(
+            throw MooError(MooErrorCode.E_TYPE,
                 $"Cannot call verb '{verbCall.VerbName}' on non-object value.");
 
         var args = await EvaluateArgumentsAsync(verbCall.Arguments);
         var result = await _context.World.InvokeVerbAsync(_context, obj.Value, verbCall.VerbName, args);
 
-        if (!result.IsSuccess)
-            throw new MooEvaluationException(result.Error ?? "Verb call failed.");
+        if (!result.IsSuccess) {
+            if (result.ErrorDetail is not null)
+                throw new MooScriptException(result.ErrorDetail);
+
+            throw new MooEvaluationException("Verb call failed.");
+        }
 
         return result.Value;
     }
@@ -617,7 +667,7 @@ public sealed class MooEvaluator {
                 var splicedValue = await EvaluateExpressionAsync(splice.Expression);
 
                 if (splicedValue is not MooValue.List list)
-                    throw new MooEvaluationException("Splice expression must evaluate to a list.");
+                    throw MooError(MooErrorCode.E_TYPE, "Splice expression must evaluate to a list.");
 
                 values.AddRange(list.Items);
                 continue;
@@ -636,7 +686,7 @@ public sealed class MooEvaluator {
             if (item is SpliceExpressionNode splice) {
                 var spliced = await EvaluateExpressionAsync(splice.Expression);
                 if (spliced is not MooValue.List list)
-                    throw new MooEvaluationException("Splice in list literal must be a list.");
+                    throw MooError(MooErrorCode.E_TYPE, "Splice in list literal must be a list.");
                 items.AddRange(list.Items);
             }
             else {
@@ -654,12 +704,54 @@ public sealed class MooEvaluator {
             foreach (var codeExpr in backtick.ErrorCodes) {
                 var codeVal = await EvaluateExpressionAsync(codeExpr);
 
-                if (codeVal is MooValue.Integer codeInt
-                    && (codeInt.Value == MooErrorCode.Any || codeInt.Value == ex.ErrorCode))
+                if (MatchesErrorCode(codeVal, ex.ErrorCode))
                     return await EvaluateExpressionAsync(backtick.DefaultValue);
             }
             throw;
         }
+    }
+
+    private async Task<MooValue?> EvaluateDynamicPropertyAccessAsync(
+        DynamicPropertyAccessExpressionNode property) {
+
+        var target = await EvaluateExpressionAsync(property.Target);
+        if (target is not MooValue.Object obj)
+            throw MooError(MooErrorCode.E_TYPE, "Cannot read dynamic property from non-object value.");
+
+        var propName = await EvaluatePropertyNameAsync(property.PropertyName);
+
+        var value = _context.World.GetProperty(obj.Value, propName);
+        if (value is null)
+            throw new MooScriptException(
+                MooErrorCode.E_PROPNF,
+                "Property not found",
+                property.Line,
+                property.Column);
+
+        return value;
+    }
+
+    private async Task<MooValue?> EvaluateDynamicPropertyAssignmentAsync(
+        DynamicPropertyAssignmentExpressionNode assignment) {
+
+        var target = await EvaluateExpressionAsync(assignment.Target);
+        if (target is not MooValue.Object obj)
+            throw MooError(MooErrorCode.E_TYPE, "Cannot write dynamic property on non-object value.");
+
+        var propName = await EvaluatePropertyNameAsync(assignment.PropertyName);
+        var value = await EvaluateExpressionAsync(assignment.Value) ?? MooValue.NothingValue;
+
+        _context.World.SetProperty(obj.Value, propName, value);
+        return value;
+    }
+     
+    private async Task<string> EvaluatePropertyNameAsync(ExpressionNode expression) {
+        var value = await EvaluateExpressionAsync(expression) ?? MooValue.NothingValue;
+
+        return value switch {
+            MooValue.String s => s.Value,
+            _ => throw MooError(MooErrorCode.E_TYPE, "Dynamic property name must be a string.")
+        };
     }
 
     private async Task<MooValue?> EvaluateFunctionCallAsync(
@@ -699,6 +791,10 @@ public sealed class MooEvaluator {
             "rmatch" => RMatch(args),
             "ticks_left" => TicksLeft(args),
             "seconds_left" => SecondsLeft(args),
+            "toliteral" => ToLiteral(args),
+            "toint" => ToInt(args),
+            "tonum" => ToInt(args),
+            "toobj" => ToObj(args),
             _ => throw new MooEvaluationException($"Unknown function: {functionCall.FunctionName}")
         };
     }
@@ -716,15 +812,19 @@ public sealed class MooEvaluator {
         var result = await _context.World.InvokeVerbAsync(
             _context, _context.ThisId, _context.Verb, args, searchFromId: parentId);
 
-        if (!result.IsSuccess)
-            throw new MooEvaluationException(result.Error ?? "pass() failed.");
+        if (!result.IsSuccess) {
+            if (result.ErrorDetail is not null)
+                throw new MooScriptException(result.ErrorDetail);
+
+            throw new MooEvaluationException("pass() failed.");
+        }
 
         return result.Value;
     }
 
     private async Task<MooValue> NotifyAsync(IReadOnlyList<MooValue> args) {
         if (args.Count == 0 || args[0] is not MooValue.Object target)
-            throw new MooEvaluationException("notify() first argument must be an object.");
+            throw MooError(MooErrorCode.E_TYPE, "notify() first argument must be an object.");
 
         await _context.World.NotifyAsync(target.Value, args.Skip(1).ToList());
         return MooValue.NothingValue;
@@ -734,7 +834,7 @@ public sealed class MooEvaluator {
 
     private async Task<MooValue> EvalAsync(IReadOnlyList<MooValue> args) {
         if (args.Count == 0 || args[0] is not MooValue.String source)
-            throw new MooEvaluationException("eval() requires a string argument.");
+            throw MooError(MooErrorCode.E_TYPE, "eval() requires a string argument.");
 
         try {
             var tokens = new MooLexer(source.Value).Lex();
@@ -743,8 +843,12 @@ public sealed class MooEvaluator {
             var evaluator = new MooEvaluator(_context);
             var result = await evaluator.ExecuteAsync(program);
 
-            if (!result.IsSuccess)
+            if (!result.IsSuccess) {
+                if (result.ErrorDetail is not null)
+                    throw new MooScriptException(result.ErrorDetail);
+
                 throw new MooEvaluationException(result.Error ?? "eval() failed.");
+            }
 
             return result.Value ?? MooValue.NothingValue;
         }
@@ -758,13 +862,12 @@ public sealed class MooEvaluator {
             ex.SourceText ??= source.Value;
             ex.SourceLabel ??= "Input to EVAL";
 
-            ex.Trace.Insert(0, new MooTraceFrame(
-                _context.ThisId,
-                _context.DefiningObjectId,
+            ex.Trace.Add(new ScriptTraceFrame(
+                null,
+                null,
                 "eval",
-                ex.Line,
+                null,
                 "... called from built-in function eval()"));
-
             throw;
         }
     }
@@ -790,18 +893,18 @@ public sealed class MooEvaluator {
 
     private static MooValue Length(IReadOnlyList<MooValue> args) {
         if (args.Count == 0)
-            throw new MooEvaluationException("length() requires an argument.");
+            throw MooError(MooErrorCode.E_ARGS, "length() requires an argument.");
 
         return args[0] switch {
             MooValue.String s => new MooValue.Integer(s.Value.Length),
             MooValue.List l => new MooValue.Integer(l.Items.Count),
-            _ => throw new MooEvaluationException("length() requires a string or list.")
+            _ => throw MooError(MooErrorCode.E_TYPE, "length() requires a string or list.")
         };
     }
 
     private static MooValue TypeOf(IReadOnlyList<MooValue> args) {
         if (args.Count == 0)
-            throw new MooEvaluationException("typeof() requires an argument.");
+            throw MooError(MooErrorCode.E_ARGS, "typeof() requires an argument.");
 
         // MOO type constants: 0=int, 1=obj, 2=str, 4=list, 9=float
         return args[0] switch {
@@ -810,13 +913,14 @@ public sealed class MooEvaluator {
             MooValue.String => new MooValue.Integer(2),
             MooValue.List => new MooValue.Integer(4),
             MooValue.Float => new MooValue.Integer(9),
+            MooValue.Error => new MooValue.Integer(3),
             _ => new MooValue.Integer(-1)
         };
     }
 
     private MooValue Parent(IReadOnlyList<MooValue> args) {
         if (args.Count == 0 || args[0] is not MooValue.Object obj)
-            throw new MooEvaluationException("parent() requires an object argument.");
+            throw MooError(MooErrorCode.E_TYPE, "parent() requires an object argument.");
 
         var target = _context.World.Get(obj.Value);
         if (target?.ParentId is { } parentId)
@@ -827,7 +931,7 @@ public sealed class MooEvaluator {
 
     private MooValue Children(IReadOnlyList<MooValue> args) {
         if (args.Count == 0 || args[0] is not MooValue.Object obj)
-            throw new MooEvaluationException("children() requires an object argument.");
+            throw MooError(MooErrorCode.E_TYPE, "children() requires an object argument.");
 
         var kids = _context.World.GetChildren(obj.Value);
         return new MooValue.List(kids.Select(id => (MooValue)new MooValue.Object(id)).ToList());
@@ -835,7 +939,7 @@ public sealed class MooEvaluator {
 
     private static MooValue SetAdd(IReadOnlyList<MooValue> args) {
         if (args.Count < 2 || args[0] is not MooValue.List list)
-            throw new MooEvaluationException("setadd() requires a list and a value.");
+            throw MooError(MooErrorCode.E_TYPE, "setadd() requires a list and a value.");
 
         var item = args[1];
         if (list.Items.Any(x => MooEqual(x, item))) return list;
@@ -845,7 +949,7 @@ public sealed class MooEvaluator {
 
     private static MooValue SetRemove(IReadOnlyList<MooValue> args) {
         if (args.Count < 2 || args[0] is not MooValue.List list)
-            throw new MooEvaluationException("setremove() requires a list and a value.");
+            throw MooError(MooErrorCode.E_TYPE, "setremove() requires a list and a value.");
 
         var item = args[1];
         var result = list.Items.ToList();
@@ -860,7 +964,7 @@ public sealed class MooEvaluator {
 
     private static MooValue ListAppend(IReadOnlyList<MooValue> args) {
         if (args.Count < 2 || args[0] is not MooValue.List list)
-            throw new MooEvaluationException("listappend() requires a list and a value.");
+            throw MooError(MooErrorCode.E_TYPE, "listappend() requires a list and a value.");
 
         return new MooValue.List(list.Items.Append(args[1]).ToList());
     }
@@ -882,7 +986,7 @@ public sealed class MooEvaluator {
 
     private MooValue Create(IReadOnlyList<MooValue> args) {
         if (args.Count == 0 || args[0] is not MooValue.Object parent)
-            throw new MooEvaluationException("create() requires an object argument.");
+            throw MooError(MooErrorCode.E_TYPE, "create() requires an object argument.");
 
         return new MooValue.Object(_context.World.CreateObject(parent.Value, _context.PlayerId));
     }
@@ -897,7 +1001,7 @@ public sealed class MooEvaluator {
 
     private MooValue SetName(IReadOnlyList<MooValue> args) {
         if (args.Count < 2 || args[0] is not MooValue.Object obj || args[1] is not MooValue.String name)
-            throw new MooEvaluationException("set_name() requires an object and a string.");
+            throw MooError(MooErrorCode.E_TYPE, "set_name() requires an object and a string.");
 
         _context.World.SetObjectName(obj.Value, name.Value);
         return MooValue.NothingValue;
@@ -905,7 +1009,7 @@ public sealed class MooEvaluator {
 
     private static MooValue Index(IReadOnlyList<MooValue> args) {
         if (args.Count < 2 || args[0] is not MooValue.String haystack || args[1] is not MooValue.String needle)
-            throw new MooEvaluationException("index() requires two string arguments.");
+            throw MooError(MooErrorCode.E_TYPE, "index() requires two string arguments.");
 
         var pos = haystack.Value.IndexOf(needle.Value, StringComparison.Ordinal);
         return new MooValue.Integer(pos >= 0 ? pos + 1 : 0); // 1-based, 0 = not found
@@ -913,7 +1017,7 @@ public sealed class MooEvaluator {
 
     private static MooValue Substr(IReadOnlyList<MooValue> args) {
         if (args.Count < 2 || args[0] is not MooValue.String str || args[1] is not MooValue.Integer startArg)
-            throw new MooEvaluationException("substr() requires a string and a start index.");
+            throw MooError(MooErrorCode.E_TYPE, "substr() requires a string and a start index.");
 
         var start = Math.Max(0, (int)startArg.Value - 1); // 1-based → 0-based
 
@@ -929,7 +1033,7 @@ public sealed class MooEvaluator {
 
     private MooValue AddAlias(IReadOnlyList<MooValue> args) {
         if (args.Count < 2 || args[0] is not MooValue.Object obj || args[1] is not MooValue.String alias)
-            throw new MooEvaluationException("add_alias() requires an object and a string.");
+            throw MooError(MooErrorCode.E_TYPE, "add_alias() requires an object and a string.");
 
         _context.World.AddAlias(obj.Value, alias.Value);
         return MooValue.NothingValue;
@@ -940,7 +1044,7 @@ public sealed class MooEvaluator {
             || args[0] is not MooValue.Object obj
             || args[1] is not MooValue.String names
             || args[2] is not MooValue.String script)
-            throw new MooEvaluationException("add_verb() requires an object, a name string, and a script string.");
+            throw MooError(MooErrorCode.E_TYPE, "add_verb() requires an object, a name string, and a script string.");
 
         _context.World.AddVerb(obj.Value, names.Value, script.Value, _context.PlayerId);
         return MooValue.NothingValue;
@@ -950,7 +1054,7 @@ public sealed class MooEvaluator {
         if (args.Count < 2
             || args[0] is not MooValue.Object obj
             || args[1] is not MooValue.String name)
-            throw new MooEvaluationException("verb_info() requires an object and a verb name.");
+            throw MooError(MooErrorCode.E_TYPE, "verb_info() requires an object and a verb name.");
 
         return _context.World.GetVerbInfo(obj.Value, name.Value)
             ?? throw new MooScriptException(MooErrorCode.E_VERBNF, $"Verb not found: {name.Value}");
@@ -966,7 +1070,7 @@ public sealed class MooEvaluator {
         if (args.Count < 2 ||
             args[0] is not MooValue.String subject ||
             args[1] is not MooValue.String pattern)
-            throw new MooEvaluationException("match()/rmatch() requires two string arguments.");
+            throw MooError(MooErrorCode.E_TYPE, "match()/rmatch() requires two string arguments.");
 
         var caseMatters = args.Count >= 3 && IsTruthy(args[2]);
         var dotnetPattern = ConvertMooRegex(pattern.Value);
@@ -999,7 +1103,7 @@ public sealed class MooEvaluator {
             }
         }
         catch (ArgumentException ex) {
-            throw new MooEvaluationException($"match()/rmatch() invalid pattern: {ex.Message}");
+            throw MooError(MooErrorCode.E_INVARG, $"match()/rmatch() invalid pattern: {ex.Message}");
         }
 
         if (!match.Success)
@@ -1036,12 +1140,116 @@ public sealed class MooEvaluator {
     private MooValue SecondsLeft(IReadOnlyList<MooValue> args)
         => new MooValue.Float(_context.Meter.SecondsLeft);
 
+    private static MooValue ToLiteral(IReadOnlyList<MooValue> args) {
+        if (args.Count != 1)
+            throw MooError(MooErrorCode.E_ARGS, "toliteral() requires exactly one argument.");
+
+        return new MooValue.String(MooToLiteral(args[0]));
+    }
+
+    private static MooValue ToInt(IReadOnlyList<MooValue> args) {
+        if (args.Count != 1)
+            throw MooError(MooErrorCode.E_ARGS, "toint() requires exactly one argument.");
+
+        return args[0] switch {
+            MooValue.Integer i => i,
+            MooValue.Float f => new MooValue.Integer((long)Math.Truncate(f.Value)),
+            MooValue.Object o => new MooValue.Integer(o.Value.Value),
+            MooValue.Error e => new MooValue.Integer(e.Code),
+            MooValue.String s => new MooValue.Integer(ParseMooIntegerString(s.Value)),
+            MooValue.Nothing => new MooValue.Integer(-1),
+            MooValue.List => throw MooError(MooErrorCode.E_TYPE, "toint() cannot convert a list."),
+            _ => new MooValue.Integer(0)
+        };
+    }
+
+    private static MooValue ToObj(IReadOnlyList<MooValue> args) {
+        if (args.Count != 1)
+            throw MooError(MooErrorCode.E_ARGS, "toobj() requires exactly one argument.");
+
+        return args[0] switch {
+            MooValue.Object o => o,
+            MooValue.Integer i => new MooValue.Object(new ObjectId(checked((int)i.Value))),
+            MooValue.Float f => new MooValue.Object(new ObjectId(checked((int)Math.Truncate(f.Value)))),
+            MooValue.Error e => new MooValue.Object(new ObjectId(e.Code)),
+            MooValue.String s => new MooValue.Object(new ObjectId(checked((int)ParseMooObjectString(s.Value)))),
+            MooValue.Nothing => new MooValue.Object(new ObjectId(-1)),
+            MooValue.List => throw MooError(MooErrorCode.E_TYPE, "toobj() cannot convert a list."),
+            _ => new MooValue.Object(new ObjectId(0))
+        };
+    }
+
+    private static long ParseMooObjectString(string value) {
+        var text = value.Trim();
+
+        if (text.StartsWith("#", StringComparison.Ordinal))
+            text = text[1..].TrimStart();
+
+        return ParseMooIntegerString(text);
+    }
+
+    private static long ParseMooIntegerString(string value) {
+        var normalized = Regex.Replace(value.Trim(), @"^([+-])\s+", "$1");
+
+        if (!double.TryParse(
+                normalized,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var number)) {
+            return 0;
+        }
+
+        if (double.IsNaN(number) || double.IsInfinity(number))
+            return 0;
+
+        return (long)Math.Truncate(number);
+    }
+
+    private static string MooToLiteral(MooValue value) => value switch {
+        MooValue.Nothing => "#-1",
+        MooValue.Integer i => i.Value.ToString(),
+        MooValue.Float f => f.Value.ToString("G17", System.Globalization.CultureInfo.InvariantCulture),
+        MooValue.String s => "\"" + EscapeMooStringLiteral(s.Value) + "\"",
+        MooValue.Object o => $"#{o.Value.Value}",
+        MooValue.Error e => MooErrorName(e.Code),
+        MooValue.List l => "{" + string.Join(", ", l.Items.Select(MooToLiteral)) + "}",
+        _ => ""
+    };
+
+    private static string EscapeMooStringLiteral(string value)
+        => value
+            .Replace("\\", "\\\\")
+            .Replace("\"", "\\\"")
+            .Replace("\r", "\\r")
+            .Replace("\n", "\\n")
+            .Replace("\t", "\\t");
+
+    private static string MooErrorName(int code) => code switch {
+        MooErrorCode.E_NONE => "E_NONE",
+        MooErrorCode.E_TYPE => "E_TYPE",
+        MooErrorCode.E_DIV => "E_DIV",
+        MooErrorCode.E_PERM => "E_PERM",
+        MooErrorCode.E_PROPNF => "E_PROPNF",
+        MooErrorCode.E_VERBNF => "E_VERBNF",
+        MooErrorCode.E_VARNF => "E_VARNF",
+        MooErrorCode.E_INVIND => "E_INVIND",
+        MooErrorCode.E_RECMOVE => "E_RECMOVE",
+        MooErrorCode.E_MAXREC => "E_MAXREC",
+        MooErrorCode.E_RANGE => "E_RANGE",
+        MooErrorCode.E_ARGS => "E_ARGS",
+        MooErrorCode.E_NACC => "E_NACC",
+        MooErrorCode.E_INVARG => "E_INVARG",
+        MooErrorCode.E_QUOTA => "E_QUOTA",
+        MooErrorCode.E_FLOAT => "E_FLOAT",
+        _ => $"E_UNKNOWN({code})"
+    };
+
     private static MooValue Add(MooValue left, MooValue right) => (left, right) switch {
         (MooValue.Integer l, MooValue.Integer r) => new MooValue.Integer(l.Value + r.Value),
         (MooValue.String l, MooValue.String r) => new MooValue.String(l.Value + r.Value),
         (MooValue.String l, _) => new MooValue.String(l.Value + MooToString(right)),
         (_, MooValue.String r) => new MooValue.String(MooToString(left) + r.Value),
-        _ => throw new MooEvaluationException(
+        _ => throw MooError(MooErrorCode.E_TYPE,
             $"Cannot add {left.GetType().Name} and {right.GetType().Name}.")
     };
 
@@ -1049,7 +1257,7 @@ public sealed class MooEvaluator {
         Func<long, long, long> op, string opName) {
 
         if (left is not MooValue.Integer l || right is not MooValue.Integer r)
-            throw new MooEvaluationException(
+            throw MooError(MooErrorCode.E_TYPE,
                 $"Cannot {opName} {left.GetType().Name} and {right.GetType().Name}.");
 
         return new MooValue.Integer(op(l.Value, r.Value));
@@ -1065,26 +1273,26 @@ public sealed class MooEvaluator {
         if (TryDouble(left, out var ld) && TryDouble(right, out var rd))
             return new MooValue.Float(floatOp(ld, rd));
 
-        throw new MooEvaluationException(
+        throw MooError(MooErrorCode.E_TYPE,
             $"Cannot {opName} {left.GetType().Name} and {right.GetType().Name}.");
     }
 
     private static MooValue DivideNumeric(MooValue left, MooValue right) {
         if (left is MooValue.Integer li && right is MooValue.Integer ri) {
             if (ri.Value == 0)
-                throw new MooEvaluationException("Division by zero.");
+                throw MooError(MooErrorCode.E_DIV, "Division by zero.");
 
             return new MooValue.Integer(li.Value / ri.Value);
         }
 
         if (TryDouble(left, out var ld) && TryDouble(right, out var rd)) {
             if (rd == 0)
-                throw new MooEvaluationException("Division by zero.");
+                throw MooError(MooErrorCode.E_DIV, "Division by zero.");
 
             return new MooValue.Float(ld / rd);
         }
 
-        throw new MooEvaluationException(
+        throw MooError(MooErrorCode.E_TYPE,
             $"Cannot divide {left.GetType().Name} and {right.GetType().Name}.");
     }
 
@@ -1113,13 +1321,13 @@ public sealed class MooEvaluator {
             return new MooValue.Integer(intOp(cmp, 0) ? 1 : 0);
         }
 
-        throw new MooEvaluationException(
+        throw MooError(MooErrorCode.E_TYPE,
             $"Cannot compare {left.GetType().Name} and {right.GetType().Name}.");
     }
 
     private static MooValue InOperator(MooValue left, MooValue right) {
         if (right is not MooValue.List list)
-            throw new MooEvaluationException("'in' requires a list on the right side.");
+            throw MooError(MooErrorCode.E_TYPE, "'in' requires a list on the right side.");
 
         for (int i = 0; i < list.Items.Count; i++)
             if (MooEqual(list.Items[i], left))
@@ -1133,6 +1341,7 @@ public sealed class MooEvaluator {
         (MooValue.String l, MooValue.String r) =>
             string.Equals(l.Value, r.Value, StringComparison.OrdinalIgnoreCase),
         (MooValue.Object l, MooValue.Object r) => l.Value == r.Value,
+        (MooValue.Error l, MooValue.Error r) => l.Code == r.Code,
         (MooValue.Nothing, MooValue.Nothing) => true,
         _ => false
     };
@@ -1194,4 +1403,13 @@ public sealed class MooEvaluator {
         if (!_context.Meter.TryTick(out var error))
             throw new MooScriptException(MooErrorCode.E_QUOTA, error ?? "Task quota exceeded.");
     }
+
+    private static MooScriptException MooError(int code, string message)
+        => new(code, message);
+
+    private static bool MatchesErrorCode(MooValue? value, int actualCode) => value switch {
+        MooValue.Integer i => i.Value == MooErrorCode.Any || i.Value == actualCode,
+        MooValue.Error e => e.Code == actualCode,
+        _ => false
+    };
 }

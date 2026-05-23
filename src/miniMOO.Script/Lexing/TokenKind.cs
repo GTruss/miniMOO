@@ -18,6 +18,7 @@ public enum TokenKind {
     Colon,
     Dot,
     DotDot,
+    Dollar,
     DollarIdentifier,  // $name — shorthand
 
     Plus,

@@ -31,6 +31,18 @@ public static partial class WorldSeeder {
             passed = 0;
             failed = 0;
 
+            test_obj = create($thing);
+            prop = "dynamic_test";
+            test_obj.(prop) = 42;
+
+            if (test_obj.(prop) == 42)
+              player:tell("PASS: dynamic property access");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: dynamic property access");
+              failed = failed + 1;
+            endif
+
             result = index("hello", "ll");
             if (result == 3)
               player:tell("PASS: index()");
@@ -71,6 +83,31 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: empty string slice");
+              failed = failed + 1;
+            endif
+
+            if ({"a", "b", "c"}[$] == "c")
+              player:tell("PASS: list $ index");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: list $ index");
+              failed = failed + 1;
+            endif
+
+            slice = {"a", "b", "c", "d"}[2..$];
+            if (length(slice) == 3 && slice[1] == "b" && slice[3] == "d")
+              player:tell("PASS: list $ slice");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: list $ slice");
+              failed = failed + 1;
+            endif
+
+            if ("hello"[$] == "o" && "hello"[2..$ - 1] == "ell")
+              player:tell("PASS: string $ index/slice");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: string $ index/slice");
               failed = failed + 1;
             endif
 
@@ -120,6 +157,62 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: in operator not found -- expected 0 got ", result);
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              result = "z" in "not a list";
+            except e (E_TYPE)
+              caught = e;
+            endtry
+            if (caught == E_TYPE)
+              player:tell("PASS: in operator E_TYPE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: in operator E_TYPE");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              result = {"a"}[2];
+            except e (E_RANGE)
+              caught = e;
+            endtry
+            if (caught == E_RANGE)
+              player:tell("PASS: list index E_RANGE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: list index E_RANGE");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              result = length(1);
+            except e (E_TYPE)
+              caught = e;
+            endtry
+            if (caught == E_TYPE)
+              player:tell("PASS: length() E_TYPE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: length() E_TYPE");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              result = 1 / 0;
+            except e (E_DIV)
+              caught = e;
+            endtry
+            if (caught == E_DIV)
+              player:tell("PASS: division E_DIV");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: division E_DIV");
               failed = failed + 1;
             endif
 
@@ -475,6 +568,113 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: tostr()");
+              failed = failed + 1;
+            endif
+
+            if (toint(34) == 34 && toint(-34) == -34 && toint(player) == 2)
+              player:tell("PASS: toint() scalar conversions");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toint() scalar conversions");
+              failed = failed + 1;
+            endif
+
+            if (toint("34") == 34 && toint("34.7") == 34 && toint(" - 34  ") == -34 && toint("wat") == 0)
+              player:tell("PASS: toint() string conversions");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toint() string conversions");
+              failed = failed + 1;
+            endif
+
+            if (toint(E_TYPE) == 1 && tonum(E_PERM) == 3)
+              player:tell("PASS: toint() error conversion");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toint() error conversion");
+              failed = failed + 1;
+            endif
+
+            if (toobj(34) == #34 && toobj(player) == player && toobj(E_TYPE) == #1)
+              player:tell("PASS: toobj() scalar conversions");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toobj() scalar conversions");
+              failed = failed + 1;
+            endif
+
+            if (typeof(1) == INT && typeof(player) == OBJ && typeof("x") == STR && typeof(E_PERM) == ERR && typeof({1}) == LIST)
+              player:tell("PASS: type constants");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: type constants");
+              failed = failed + 1;
+            endif
+
+            if (toobj("34") == #34 && toobj("#34") == #34 && toobj("#34.7") == #34 && toobj("wat") == #0)
+              player:tell("PASS: toobj() string conversions");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toobj() string conversions");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              toobj({});
+            except (E_TYPE)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: toobj() E_TYPE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toobj() E_TYPE");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              toint({});
+            except (E_TYPE)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: toint() E_TYPE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toint() E_TYPE");
+              failed = failed + 1;
+            endif
+
+            literal = toliteral({1, "two", player, E_PERM});
+            if (literal == "{1, \"two\", #2, E_PERM}")
+              player:tell("PASS: toliteral()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toliteral() -- got ", literal);
+              failed = failed + 1;
+            endif
+
+            if (typeof(E_PERM) == 3 && toliteral(E_PERM) == "E_PERM")
+              player:tell("PASS: error values");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: error values");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              toliteral();
+            except (E_ARGS)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: toliteral() E_ARGS");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toliteral() E_ARGS");
               failed = failed + 1;
             endif
 

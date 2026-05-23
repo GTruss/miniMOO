@@ -5,15 +5,31 @@ namespace miniMOO.Host.World;
 
 public static partial class WorldSeeder {
     private static void AddUtilityObjects(InMemoryObjectRepository repo) {
+        AddGenericUtilitiesPackage(repo);
         AddStringUtils(repo);
         AddBuildingUtils(repo);
         AddObjectUtils(repo);
+        AddListUtils(repo);
+        AddCodeUtils(repo);
+    }
+
+    // ── Generic Utilities Package (#78) ───────────────────────────
+    private static void AddGenericUtilitiesPackage(InMemoryObjectRepository repo) {
+        var genUtils = Obj(WorldIds.GenericUtilitiesPackage, ObjectId.System, WorldIds.Root, null, "Generic Utilities Package");
+        genUtils.Flags = ObjectFlags.Readable;
+        genUtils.Verbs.Add(ScriptVerb(["help"], """
+            return "This is a collection of utility verbs for use in your MOO. It includes:\n\n" +
+                   "- $string_utils: string manipulation verbs\n" +
+                   "- $building_utils: object creation and building helper verbs\n" +
+                   "- $object_utils: general-purpose object query verbs";
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+        repo.Add(genUtils);
     }
 
     // ── $string_utils (#20) ───────────────────────────────────────
 
     private static void AddStringUtils(InMemoryObjectRepository repo) {
-        var su = Obj(WorldIds.StringUtils, ObjectId.System, null, null, "$string_utils");
+        var su = Obj(WorldIds.StringUtils, ObjectId.System, WorldIds.GenericUtilitiesPackage, null, "$string_utils");
         su.Flags = ObjectFlags.Readable;
 
         // explode(str, sep) => list of substrings separated by sep
@@ -75,13 +91,77 @@ public static partial class WorldSeeder {
             return (m = match(@args)) ? m[3][1][2] + 1 | 0;       
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
+        su.Verbs.Add(ScriptVerb(["from_list"], """
+            {thelist, ?separator = ""} = args;
+            if (separator == "")
+              return tostr(@thelist);
+            elseif (thelist)
+              result = tostr(thelist[1]);
+              for elt in (listdelete(thelist, 1))
+                result = tostr(result, separator, elt);
+              endfor
+              return result;
+            else
+              return "";
+            endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["from_value"], """
+            {value, ?quote_strings = 0, ?list_depth = 1} = args;
+            if (typeof(value) == LIST)
+              if (value)
+                if (list_depth)
+                  result = "{" + this:from_value(value[1], quote_strings, list_depth - 1);
+                  for v in (listdelete(value, 1))
+                    result = tostr(result, ", ", this:from_value(v, quote_strings, list_depth - 1));
+                  endfor
+                  return result + "}";
+                else
+                  return "{...}";
+                endif
+              else
+                return "{}";
+              endif
+            elseif (quote_strings)
+              if (typeof(value) == STR)
+                result = "\"";
+                while (q = index(value, "\"") || index(value, "\\"))
+                  if (value[q] == "\"")
+                    q = min(q, index(value + "\\", "\\"));
+                  endif
+                  result = result + value[1..q - 1] + "\\" + value[q];
+                  value = value[q + 1..$];
+                endwhile
+                return result + value + "\"";
+              elseif (typeof(value) == ERR)
+                return $code_utils:error_name(value);
+              else
+                return tostr(value);
+              endif
+            else
+              return tostr(value);
+            endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["char_list"], """
+            if (30 < (len = length(string = args[1])))
+              return {@this:char_list(string[1..$ / 2]), @this:char_list(string[$ / 2 + 1..$])};
+            else
+              l = {};
+              for c in [1..len]
+                l = {@l, string[c]};
+              endfor
+              return l;
+            endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
         repo.Add(su);
     } 
 
     // ── $building_utils (#21) ─────────────────────────────────────
 
     private static void AddBuildingUtils(InMemoryObjectRepository repo) {
-        var bu = Obj(WorldIds.BuildingUtils, ObjectId.System, null, null, "$building_utils");
+        var bu = Obj(WorldIds.BuildingUtils, ObjectId.System, WorldIds.GenericUtilitiesPackage, null, "$building_utils");
         bu.Flags = ObjectFlags.Readable;
 
         // parse_names(spec) => {name, {alias, alias, ...}}
@@ -120,28 +200,36 @@ public static partial class WorldSeeder {
         // make_exit(spec, source, dest)
         // Creates a child of $exit with direction verb(s), placed in source, pointing to dest.
         bu.Verbs.Add(ScriptVerb(["make_exit"], """
-            spec   = args[1];
-            source = args[2];
-            dest   = args[3];
-
-            exit_obj = create($exit);
-            this:set_names(exit_obj, spec);
-            exit_obj.source = source;
-            exit_obj.destination = dest;
-
-            move(exit_obj, source);
-
-            source.exits = setadd(source.exits, exit_obj);
-            dest.entrances = setadd(dest.entrances, exit_obj);
-            verb_names = spec;
-            colon = index(verb_names, ":");
-
-            if (colon)
-              verb_names = substr(verb_names, 1, colon - 1) + "," + substr(verb_names, colon + 1);
+            {spec, source, dest, ?use_recycler, ?exit_kind = $exit} = args;
+            exit = player:_create(exit_kind);
+            if (typeof(exit) == ERR)
+              player:notify(tostr("Cannot create new exit as a child of ", $string_utils:nn(exit_kind), ": ", exit, ".  See `help @build-options' for information on how to specify the kind of exit this command tries to create."));
+              return;
             endif
-            add_verb(exit_obj, verb_names, "this:invoke();");
-            player:tell("Exit ", exit_obj.name, " (", exit_obj, ") to ", dest.name, " (", dest, ") created.");
-            return exit_obj;
+            for f in ($string_utils:char_list(player:build_option("create_flags") || ""))
+              exit.(f) = 1;
+            endfor
+            $building_utils:set_names(exit, spec);
+            exit.source = source;
+            exit.dest = dest;
+            source_ok = source:add_exit(exit);
+            dest_ok = dest:add_entrance(exit);
+            move(exit, $nothing);
+            via = $string_utils:from_value(setadd(exit.aliases, exit.name), 1);
+            if (source_ok)
+              player:tell("Exit from ", source.name, " (", source, ") to ", dest.name, " (", dest, ") via ", via, " created with id ", exit, ".");
+              if (!dest_ok)
+                player:tell("However, I couldn't add ", exit, " as a legal entrance to ", dest.name, ".  You may have to get its owner, ", dest.owner.name, " to add it for you.");
+              endif
+              return {exit};
+            elseif (dest_ok)
+              player:tell("Exit to ", dest.name, " (", dest, ") via ", via, " created with id ", exit, ".  However, I couldn't add ", exit, " as a legal exit from ", source.name, ".  Get its owner, ", source.owner.name, " to add it for you.");
+              return {exit};
+            else
+              "player:_recycle(exit);";
+              player:tell("I couldn't add a new exit as EITHER a legal exit from ", source.name, " OR as a legal entrance to ", dest.name, ".  Get their owners, ", source.owner.name, " and ", dest.owner.name, ", respectively, to add it for you.");
+              return 0;
+            endif
         """));
 
         repo.Add(bu);
@@ -150,7 +238,7 @@ public static partial class WorldSeeder {
     // ── $object_utils (#52) ───────────────────────────────────────
 
     private static void AddObjectUtils(InMemoryObjectRepository repo) {
-        var genObjectUtils = Obj(WorldIds.ObjectUtils, ObjectId.System, null, null, "$object_utils");
+        var genObjectUtils = Obj(WorldIds.ObjectUtils, ObjectId.System, WorldIds.GenericUtilitiesPackage, null, "$object_utils");
         genObjectUtils.Flags = ObjectFlags.Readable;
 
         genObjectUtils.Verbs.Add(ScriptVerb(["ancestors"], """
@@ -261,4 +349,44 @@ public static partial class WorldSeeder {
 
         repo.Add(genObjectUtils);
     }
+
+    // ── $list_utils (#55) ───────────────────────────────────────
+
+    private static void AddListUtils(InMemoryObjectRepository repo) {
+        var lu = Obj(WorldIds.ListUtils, ObjectId.System, WorldIds.GenericUtilitiesPackage, null, "$list_utils");
+        lu.Flags = ObjectFlags.Readable;
+
+
+        lu.Verbs.Add(ScriptVerb(["assoc"], """
+            {target, thelist, ?indx = 1} = args;
+            for t in (thelist)
+              if (typeof(t) == LIST && `t[indx] == target ! E_RANGE => 0')
+                return t;
+              endif
+            endfor
+            return {};
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+
+        repo.Add(lu);
+
+    }
+
+    // ── $code_utils (#59) ───────────────────────────────────────
+
+    private static void AddCodeUtils(InMemoryObjectRepository repo) {
+        var cu = Obj(WorldIds.CodeUtils, ObjectId.System, WorldIds.GenericUtilitiesPackage, null, "$code_utils");
+        cu.Flags = ObjectFlags.Readable;
+
+
+        cu.Verbs.Add(ScriptVerb(["error_name"], """
+            return toliteral(@args);
+            return this.error_names[toint(args[1]) + 1];
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+
+        repo.Add(cu);
+
+    }
+
 }

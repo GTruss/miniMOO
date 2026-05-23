@@ -16,12 +16,19 @@ public static class WorldIds {
 
     public static readonly ObjectId StringUtils   = new(20);
     public static readonly ObjectId BuildingUtils = new(21);
-
     public static readonly ObjectId ObjectUtils = new(52);
+    public static readonly ObjectId ListUtils = new(55);
+    public static readonly ObjectId CodeUtils = new(59);
+
     public static readonly ObjectId MailPlayer = new(40);
     public static readonly ObjectId Wiz = new(57);
     public static readonly ObjectId FrandsPlayerClass = new(88);
     public static readonly ObjectId Prog = new(58);
+    
+    public static readonly ObjectId GenericOptionPackage = new(68);
+    public static readonly ObjectId GenericUtilitiesPackage = new(78);
+
+    public static readonly ObjectId BuilderOptions = new(77);
 
     public static readonly ObjectId Foyer = new(101);
     public static readonly ObjectId Library = new(102);
