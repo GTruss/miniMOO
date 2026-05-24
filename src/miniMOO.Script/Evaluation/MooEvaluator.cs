@@ -228,6 +228,9 @@ public sealed class MooEvaluator {
             case IntegerLiteralExpressionNode literal:
                 return new MooValue.Integer(literal.Value);
 
+            case FloatLiteralExpressionNode literal:
+                return new MooValue.Float(literal.Value);
+
             case ObjectLiteralExpressionNode literal:
                 return new MooValue.Object(new ObjectId(checked((int)literal.Value)));
 
@@ -334,9 +337,11 @@ public sealed class MooEvaluator {
 
         return unary.Op switch {
             UnaryOp.Not => new MooValue.Integer(IsTruthy(operand) ? 0 : 1),
-            UnaryOp.Negate => operand is MooValue.Integer i
-                ? new MooValue.Integer(-i.Value)
-                : throw new MooEvaluationException("Unary negation requires an integer."),
+            UnaryOp.Negate => operand switch {
+                MooValue.Integer i => new MooValue.Integer(-i.Value),
+                MooValue.Float f => new MooValue.Float(-f.Value),
+                _ => throw MooError(MooErrorCode.E_TYPE, "Unary negation requires a number.")
+            },
             _ => throw new MooEvaluationException($"Unknown unary op: {unary.Op}")
         };
     }
@@ -729,8 +734,12 @@ public sealed class MooEvaluator {
             foreach (var codeExpr in backtick.ErrorCodes) {
                 var codeVal = await EvaluateExpressionAsync(codeExpr);
 
-                if (MatchesErrorCode(codeVal, ex.ErrorCode))
-                    return await EvaluateExpressionAsync(backtick.DefaultValue);
+                if (MatchesErrorCode(codeVal, ex.ErrorCode)) {
+                    if (backtick.DefaultValue is not null)
+                        return await EvaluateExpressionAsync(backtick.DefaultValue);
+
+                    return new MooValue.Error(ex.ErrorCode);
+                }
             }
             throw;
         }
@@ -804,23 +813,33 @@ public sealed class MooEvaluator {
             "setremove" => SetRemove(args),
             "listappend" => ListAppend(args),
             "listdelete" => ListDelete(args),
+            "listset" => ListSet(args),
             "create" => Create(args),
             "move" => await MoveAsync(args),
             "set_name" => SetName(args),
             "index" => Index(args),
+            "rindex" => RIndex(args),
             "substr" => Substr(args),
+            "strsub" => StrSub(args),
             "add_alias" => AddAlias(args),
             "add_verb" => AddVerbBuiltin(args),
+            "verbs" => Verbs(args),
             "verb_info" => VerbInfo(args),
+            "verb_args" => VerbArgs(args),
             "verb_code" => VerbCode(args),
+            "properties" => Properties(args),
             "match" => Match(args),
             "rmatch" => RMatch(args),
             "ticks_left" => TicksLeft(args),
             "seconds_left" => SecondsLeft(args),
+            "set_task_perms" => MooValue.NothingValue,
             "toliteral" => ToLiteral(args),
             "toint" => ToInt(args),
             "tonum" => ToInt(args),
             "toobj" => ToObj(args),
+            "abs" => Abs(args),
+            "min" => MinMax(args, findMin: true),
+            "max" => MinMax(args, findMin: false),
             _ => throw new MooEvaluationException($"Unknown function: {functionCall.FunctionName}")
         };
     }
@@ -1010,6 +1029,20 @@ public sealed class MooEvaluator {
         return new MooValue.List(result);
     }
 
+    private static MooValue ListSet(IReadOnlyList<MooValue> args) {
+        if (args.Count < 3 || args[0] is not MooValue.List list || args[2] is not MooValue.Integer index)
+            throw MooError(MooErrorCode.E_TYPE, "listset() requires a list, a value, and an integer index.");
+
+        var zeroBasedIndex = (int)index.Value - 1;
+
+        if (zeroBasedIndex < 0 || zeroBasedIndex >= list.Items.Count)
+            throw new MooScriptException(MooErrorCode.E_RANGE, "listset() index out of range.");
+
+        var result = list.Items.ToList();
+        result[zeroBasedIndex] = args[1];
+        return new MooValue.List(result);
+    }
+
     private MooValue Create(IReadOnlyList<MooValue> args) {
         if (args.Count == 0 || args[0] is not MooValue.Object parent)
             throw MooError(MooErrorCode.E_TYPE, "create() requires an object argument.");
@@ -1037,8 +1070,24 @@ public sealed class MooEvaluator {
         if (args.Count < 2 || args[0] is not MooValue.String haystack || args[1] is not MooValue.String needle)
             throw MooError(MooErrorCode.E_TYPE, "index() requires two string arguments.");
 
-        var pos = haystack.Value.IndexOf(needle.Value, StringComparison.Ordinal);
+        var comparison = args.Count >= 3 && IsTruthy(args[2])
+            ? StringComparison.Ordinal
+            : StringComparison.OrdinalIgnoreCase;
+
+        var pos = haystack.Value.IndexOf(needle.Value, comparison);
         return new MooValue.Integer(pos >= 0 ? pos + 1 : 0); // 1-based, 0 = not found
+    }
+
+    private static MooValue RIndex(IReadOnlyList<MooValue> args) {
+        if (args.Count < 2 || args[0] is not MooValue.String haystack || args[1] is not MooValue.String needle)
+            throw MooError(MooErrorCode.E_TYPE, "rindex() requires two string arguments.");
+
+        var comparison = args.Count >= 3 && IsTruthy(args[2])
+            ? StringComparison.Ordinal
+            : StringComparison.OrdinalIgnoreCase;
+
+        var pos = haystack.Value.LastIndexOf(needle.Value, comparison);
+        return new MooValue.Integer(pos >= 0 ? pos + 1 : 0);
     }
 
     private static MooValue Substr(IReadOnlyList<MooValue> args) {
@@ -1055,6 +1104,39 @@ public sealed class MooEvaluator {
         }
 
         return new MooValue.String(str.Value[start..]);
+    }
+
+    private static MooValue StrSub(IReadOnlyList<MooValue> args) {
+        if (args.Count < 3
+            || args[0] is not MooValue.String subject
+            || args[1] is not MooValue.String oldValue
+            || args[2] is not MooValue.String newValue)
+            throw MooError(MooErrorCode.E_TYPE, "strsub() requires three string arguments.");
+
+        if (oldValue.Value.Length == 0)
+            throw MooError(MooErrorCode.E_INVARG, "strsub() cannot replace an empty string.");
+
+        var comparison = args.Count >= 4 && IsTruthy(args[3])
+            ? StringComparison.Ordinal
+            : StringComparison.OrdinalIgnoreCase;
+
+        var input = subject.Value;
+        var output = new System.Text.StringBuilder();
+        var start = 0;
+
+        while (start < input.Length) {
+            var index = input.IndexOf(oldValue.Value, start, comparison);
+
+            if (index < 0)
+                break;
+
+            output.Append(input, start, index - start);
+            output.Append(newValue.Value);
+            start = index + oldValue.Value.Length;
+        }
+
+        output.Append(input, start, input.Length - start);
+        return new MooValue.String(output.ToString());
     }
 
     private MooValue AddAlias(IReadOnlyList<MooValue> args) {
@@ -1076,24 +1158,48 @@ public sealed class MooEvaluator {
         return MooValue.NothingValue;
     }
 
+    private MooValue Verbs(IReadOnlyList<MooValue> args) {
+        if (args.Count < 1 || args[0] is not MooValue.Object obj)
+            throw MooError(MooErrorCode.E_TYPE, "verbs() requires an object.");
+
+        return _context.World.GetVerbNames(obj.Value);
+    }
+
     private MooValue VerbInfo(IReadOnlyList<MooValue> args) {
         if (args.Count < 2
             || args[0] is not MooValue.Object obj
-            || args[1] is not MooValue.String name)
-            throw MooError(MooErrorCode.E_TYPE, "verb_info() requires an object and a verb name.");
+            || args[1] is not (MooValue.String or MooValue.Integer))
+            throw MooError(MooErrorCode.E_TYPE, "verb_info() requires an object and a verb name or number.");
 
-        return _context.World.GetVerbInfo(obj.Value, name.Value)
-            ?? throw new MooScriptException(MooErrorCode.E_VERBNF, $"Verb not found: {name.Value}");
+        return _context.World.GetVerbInfo(obj.Value, args[1])
+            ?? throw new MooScriptException(MooErrorCode.E_VERBNF, $"Verb not found: {MooToString(args[1])}");
+    }
+
+    private MooValue VerbArgs(IReadOnlyList<MooValue> args) {
+        if (args.Count < 2
+            || args[0] is not MooValue.Object obj
+            || args[1] is not (MooValue.String or MooValue.Integer))
+            throw MooError(MooErrorCode.E_TYPE, "verb_args() requires an object and a verb name or number.");
+
+        return _context.World.GetVerbArgs(obj.Value, args[1])
+            ?? throw new MooScriptException(MooErrorCode.E_VERBNF, $"Verb not found: {MooToString(args[1])}");
     }
 
     private MooValue VerbCode(IReadOnlyList<MooValue> args) {
         if (args.Count < 2
             || args[0] is not MooValue.Object obj
-            || args[1] is not MooValue.String name)
-            throw MooError(MooErrorCode.E_TYPE, "verb_code() requires an object and a verb name.");
+            || args[1] is not (MooValue.String or MooValue.Integer))
+            throw MooError(MooErrorCode.E_TYPE, "verb_code() requires an object and a verb name or number.");
 
-        return _context.World.GetVerbCode(obj.Value, name.Value)
-            ?? throw new MooScriptException(MooErrorCode.E_VERBNF, $"Verb not found: {name.Value}");
+        return _context.World.GetVerbCode(obj.Value, args[1])
+            ?? throw new MooScriptException(MooErrorCode.E_VERBNF, $"Verb not found: {MooToString(args[1])}");
+    }
+
+    private MooValue Properties(IReadOnlyList<MooValue> args) {
+        if (args.Count < 1 || args[0] is not MooValue.Object obj)
+            throw MooError(MooErrorCode.E_TYPE, "properties() requires an object.");
+
+        return _context.World.GetPropertyNames(obj.Value);
     }
 
     private static MooValue Match(IReadOnlyList<MooValue> args)
@@ -1214,6 +1320,54 @@ public sealed class MooEvaluator {
             _ => new MooValue.Object(new ObjectId(0))
         };
     }
+
+    private static MooValue Abs(IReadOnlyList<MooValue> args) {
+        if (args.Count != 1)
+            throw MooError(MooErrorCode.E_ARGS, "abs() requires exactly one argument.");
+
+        return args[0] switch {
+            MooValue.Integer i => new MooValue.Integer(Math.Abs(i.Value)),
+            MooValue.Float f => new MooValue.Float(Math.Abs(f.Value)),
+            _ => throw MooError(MooErrorCode.E_TYPE, "abs() requires a number.")
+        };
+    }
+
+    private static MooValue MinMax(IReadOnlyList<MooValue> args, bool findMin) {
+        if (args.Count == 0)
+            throw MooError(MooErrorCode.E_ARGS, $"{(findMin ? "min" : "max")}() requires at least one argument.");
+
+        var hasFloat = args.Any(arg => arg is MooValue.Float);
+
+        if (!hasFloat) {
+            var result = args[0] is MooValue.Integer first
+                ? first.Value
+                : throw MooError(MooErrorCode.E_TYPE, $"{(findMin ? "min" : "max")}() requires numbers.");
+
+            foreach (var arg in args.Skip(1)) {
+                if (arg is not MooValue.Integer value)
+                    throw MooError(MooErrorCode.E_TYPE, $"{(findMin ? "min" : "max")}() requires numbers.");
+
+                result = findMin ? Math.Min(result, value.Value) : Math.Max(result, value.Value);
+            }
+
+            return new MooValue.Integer(result);
+        }
+
+        var floatResult = AsDouble(args[0], findMin ? "min" : "max");
+
+        foreach (var arg in args.Skip(1)) {
+            var value = AsDouble(arg, findMin ? "min" : "max");
+            floatResult = findMin ? Math.Min(floatResult, value) : Math.Max(floatResult, value);
+        }
+
+        return new MooValue.Float(floatResult);
+    }
+
+    private static double AsDouble(MooValue value, string functionName) => value switch {
+        MooValue.Integer i => i.Value,
+        MooValue.Float f => f.Value,
+        _ => throw MooError(MooErrorCode.E_TYPE, $"{functionName}() requires numbers.")
+    };
 
     private static long ParseMooObjectString(string value) {
         var text = value.Trim();
@@ -1374,6 +1528,9 @@ public sealed class MooEvaluator {
 
     private static bool MooEqual(MooValue left, MooValue right) => (left, right) switch {
         (MooValue.Integer l, MooValue.Integer r) => l.Value == r.Value,
+        (MooValue.Float l, MooValue.Float r) => l.Value == r.Value,
+        (MooValue.Integer l, MooValue.Float r) => l.Value == r.Value,
+        (MooValue.Float l, MooValue.Integer r) => l.Value == r.Value,
         (MooValue.String l, MooValue.String r) =>
             string.Equals(l.Value, r.Value, StringComparison.OrdinalIgnoreCase),
         (MooValue.Object l, MooValue.Object r) => l.Value == r.Value,

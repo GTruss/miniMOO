@@ -579,6 +579,27 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            vlist = verbs($wiz);
+            if ("_test_destructure" in vlist)
+              player:tell("PASS: verbs()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: verbs()");
+              failed = failed + 1;
+            endif
+
+            vnum = "_test_destructure" in vlist;
+            info = verb_info($wiz, vnum);
+            argspec = verb_args($wiz, vnum);
+            code = verb_code($wiz, vnum);
+            if (info[3] == "_test_destructure" && argspec[1] == "none" && argspec[2] == "none" && argspec[3] == "none" && typeof(code) == LIST)
+              player:tell("PASS: numeric verb_info()/verb_args()/verb_code()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: numeric verb_info()/verb_args()/verb_code()");
+              failed = failed + 1;
+            endif
+
             caught = 0;
             try
               verb_code(this, "definitely_not_a_verb");
@@ -590,6 +611,54 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: verb_code() not found");
+              failed = failed + 1;
+            endif
+
+            props = properties(#0);
+            if ("root" in props && "string_utils" in props)
+              player:tell("PASS: properties()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: properties()");
+              failed = failed + 1;
+            endif
+
+            changed = listset({"a", "b", "c"}, "B", 2);
+            if (changed[1] == "a" && changed[2] == "B" && changed[3] == "c")
+              player:tell("PASS: listset()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: listset()");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              listset({"a"}, "x", 2);
+            except (E_RANGE)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: listset() E_RANGE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: listset() E_RANGE");
+              failed = failed + 1;
+            endif
+
+            if (index("Alpha", "a") == 1 && index("Alpha", "a", 1) == 5 && rindex("banAna", "A") == 6 && rindex("banAna", "A", 1) == 4)
+              player:tell("PASS: index()/rindex() case handling");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: index()/rindex() case handling");
+              failed = failed + 1;
+            endif
+
+            if (strsub("foo Foo", "foo", "bar") == "bar bar" && strsub("foo Foo", "foo", "bar", 1) == "bar Foo")
+              player:tell("PASS: strsub()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: strsub()");
               failed = failed + 1;
             endif
 
@@ -892,6 +961,109 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: ternary false branch");
+              failed = failed + 1;
+            endif
+
+            if (2.5 == 2.5 && 2 == 2.0)
+              player:tell("PASS: float equality");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: float equality");
+              failed = failed + 1;
+            endif
+
+            if (abs(-5) == 5 && abs(5) == 5)
+              player:tell("PASS: abs() integer");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: abs() integer");
+              failed = failed + 1;
+            endif
+
+            if (abs(-2.5) == 2.5 && abs(2.5) == 2.5)
+              player:tell("PASS: abs() float");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: abs() float");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              abs("nope");
+            except (E_TYPE)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: abs() E_TYPE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: abs() E_TYPE");
+              failed = failed + 1;
+            endif
+
+            if (min(3, -1, 5, 2) == -1 && max(3, -1, 5, 2) == 5)
+              player:tell("PASS: min()/max() integers");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: min()/max() integers");
+              failed = failed + 1;
+            endif
+
+            if (min(3, -1.5, 5) == -1.5 && max(3, -1.5, 5.25) == 5.25)
+              player:tell("PASS: min()/max() floats");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: min()/max() floats");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              min("nope", 1);
+            except (E_TYPE)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: min()/max() E_TYPE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: min()/max() E_TYPE");
+              failed = failed + 1;
+            endif
+
+            seq = $seq_utils:from_string("10...12,15");
+            if (length(seq) == 4 && seq[1] == 10 && seq[2] == 13 && seq[3] == 15 && seq[4] == 16)
+              player:tell("PASS: $seq_utils:from_string()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $seq_utils:from_string() -- got ", seq);
+              failed = failed + 1;
+            endif
+
+            seq = $seq_utils:union({1, 4}, {3, 6}, {10, 11});
+            if (length(seq) == 4 && seq[1] == 1 && seq[2] == 6 && seq[3] == 10 && seq[4] == 11)
+              player:tell("PASS: $seq_utils:union()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $seq_utils:union() -- got ", seq);
+              failed = failed + 1;
+            endif
+
+            seq = $seq_utils:intersection({1, 6}, {3, 8}, {4, 5});
+            if (length(seq) == 2 && seq[1] == 4 && seq[2] == 5)
+              player:tell("PASS: $seq_utils:intersection()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $seq_utils:intersection() -- got ", seq);
+              failed = failed + 1;
+            endif
+
+            if ($seq_utils:from_string("nope") == E_INVARG)
+              player:tell("PASS: $seq_utils:from_string() E_INVARG");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $seq_utils:from_string() E_INVARG");
               failed = failed + 1;
             endif
 

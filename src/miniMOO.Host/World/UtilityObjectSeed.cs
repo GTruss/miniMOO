@@ -1,3 +1,4 @@
+using miniMOO.Core.Language;
 using miniMOO.Core.Things;
 using miniMOO.Engine.Repositories;
 
@@ -11,6 +12,7 @@ public static partial class WorldSeeder {
         AddGenderUtils(repo);
         AddObjectUtils(repo);
         AddListUtils(repo);
+        AddSeqUtils(repo);
         AddCodeUtils(repo);
         AddCommandUtils(repo);
     }
@@ -106,6 +108,62 @@ public static partial class WorldSeeder {
             else
               return "";
             endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["columnize", "columnise"], """
+            {items, n, ?width = 79} = args;
+            height = (length(items) + n - 1) / n;
+            items = {@items, @$list_utils:make(height * n - length(items), "")};
+            colwidths = {};
+            for col in [1..n - 1]
+              colwidths = listappend(colwidths, 1 - (width + 1) * col / n);
+            endfor
+            result = {};
+            for row in [1..height]
+              line = tostr(items[row]);
+              for col in [1..n - 1]
+                line = tostr(this:left(line, colwidths[col]), " ", items[row + col * height]);
+              endfor
+              result = listappend(result, line[1..min($, width)]);
+            endfor
+            return result;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["left"], """
+            {text, len, ?fill = " "} = args;
+            abslen = abs(len);
+            out = tostr(text);
+            if (length(out) < abslen)
+              return out + this:space(length(out) - abslen, fill);
+            else
+              return len > 0 ? out | out[1..abslen];
+            endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["space"], """
+            {n, ?fill = " "} = args;
+            if (typeof(n) == STR)
+              n = length(n);
+            endif
+            if (n > 1000)
+              "Prevent someone from crashing the moo with $string_utils:space($maxint)";
+              return E_INVARG;
+            endif
+            if (" " != fill)
+              fill = fill + fill;
+              fill = fill + fill;
+              fill = fill + fill;
+            elseif ((n = abs(n)) < 70)
+              return "                                                                      "[1..n];
+            else
+              fill = "                                                                      ";
+            endif
+            m = (n - 1) / length(fill);
+            while (m)
+              fill = fill + fill;
+              m = m / 2;
+            endwhile
+            return n > 0 ? fill[1..n] | fill[$ + 1 + n..$];
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         su.Verbs.Add(ScriptVerb(["from_value"], """
@@ -372,7 +430,7 @@ public static partial class WorldSeeder {
         repo.Add(bu);
     }
 
-    // ── $object_utils (#52) ───────────────────────────────────────
+    // ── $gender_utils (#41) ─────────────────────────────────────
 
     private static void AddGenderUtils(InMemoryObjectRepository repo) {
         var gu = Obj(WorldIds.GenderUtils, ObjectId.System, WorldIds.GenericUtilitiesPackage, null, "$gender_utils");
@@ -464,6 +522,8 @@ public static partial class WorldSeeder {
         repo.Add(gu);
     }
 
+    // ── $object_utils (#52) ───────────────────────────────────────
+
     private static void AddObjectUtils(InMemoryObjectRepository repo) {
         var genObjectUtils = Obj(WorldIds.ObjectUtils, ObjectId.System, WorldIds.GenericUtilitiesPackage, null, "$object_utils");
         genObjectUtils.Flags = ObjectFlags.Readable;
@@ -471,7 +531,7 @@ public static partial class WorldSeeder {
         genObjectUtils.Verbs.Add(ScriptVerb(["has_callable_verb"], """
             {object, verbname} = args;
             while (valid(object))
-              if (`index(verb_info(object, verbname)[2], "x") ! E_VERBNF => 0' && verb_code(object, verbname))
+              if (`index(verb_info(object, verbname)[2], "x") ! E_VERBNF' && verb_code(object, verbname))
                 return {object};
               endif
               object = parent(object);
@@ -608,11 +668,30 @@ public static partial class WorldSeeder {
         lu.Verbs.Add(ScriptVerb(["assoc"], """
             {target, thelist, ?indx = 1} = args;
             for t in (thelist)
-              if (typeof(t) == LIST && `t[indx] == target ! E_RANGE => 0')
+              if (typeof(t) == LIST && `t[indx] == target ! E_RANGE')
                 return t;
               endif
             endfor
             return {};
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        lu.Verbs.Add(ScriptVerb(["make"], """
+            {n, ?elt = 0} = args;
+            if (n < 0)
+              return E_INVARG;
+            endif
+            ret = {};
+            build = {elt};
+            while (1)
+              if (n % 2)
+                ret = {@ret, @build};
+              endif
+              if (n = n / 2)
+                build = {@build, @build};
+              else
+                return ret;
+              endif
+            endwhile
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
 
@@ -620,11 +699,161 @@ public static partial class WorldSeeder {
 
     }
 
+    // -- $seq_utils (#33) -------------------------------------------------
+
+    private static void AddSeqUtils(InMemoryObjectRepository repo) {
+        var su = Obj(WorldIds.SeqUtils, ObjectId.System, WorldIds.GenericUtilitiesPackage, null, "$seq_utils");
+        su.Flags = ObjectFlags.Readable;
+
+        su.Verbs.Add(ScriptVerb(["from_string"], """
+            ":from_string(string) => corresponding finite sequence or E_INVARG";
+            text = strsub(args[1], " ", "");
+            if (!text)
+              return {};
+            endif
+
+            parts = {};
+            for word in ($string_utils:explode(text, ","))
+              sep = index(word, "...");
+              seplen = 3;
+              if (!sep)
+                sep = index(word, "..");
+                seplen = 2;
+              endif
+
+              if (!sep)
+                if (!match(word, "^[-+]?[0-9]+$"))
+                  return E_INVARG;
+                endif
+                start = toint(word);
+                part = {start, start + 1};
+              else
+                if (sep == 1)
+                  return E_INVARG;
+                endif
+
+                first = word[1..sep - 1];
+                last = word[sep + seplen..$];
+
+                if (!(match(first, "^[-+]?[0-9]+$") && match(last, "^[-+]?[0-9]+$")))
+                  return E_INVARG;
+                endif
+
+                start = toint(first);
+                finish = toint(last);
+                part = finish >= start ? {start, finish + 1} | {};
+              endif
+
+              parts = {@parts, part};
+            endfor
+
+            return this:union(@parts);
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["union"], """
+            ":union(seq1,seq2,...) => union of all finite sequences";
+            result = {};
+            for seq in (args)
+              if (length(seq) % 2)
+                return E_INVARG;
+              endif
+
+              for r in [1..length(seq) / 2]
+                result = this:_add_interval(result, seq[(2 * r) - 1], seq[2 * r]);
+              endfor
+            endfor
+            return result;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["intersection"], """
+            ":intersection(seq1,seq2,...) => intersection of all finite sequences";
+            if (!args)
+              return {};
+            endif
+
+            result = args[1];
+            if (length(result) % 2)
+              return E_INVARG;
+            endif
+
+            for seq in (args[2..$])
+              if (length(seq) % 2)
+                return E_INVARG;
+              endif
+              result = this:_intersect_two(result, seq);
+            endfor
+
+            return result;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["_add_interval"], """
+            {seq, first, after} = args;
+            if (after <= first)
+              return seq;
+            endif
+
+            new = {};
+            inserted = 0;
+
+            for r in [1..length(seq) / 2]
+              start = seq[(2 * r) - 1];
+              finish = seq[2 * r];
+
+              if (finish < first)
+                new = {@new, start, finish};
+              elseif (after < start)
+                if (!inserted)
+                  new = {@new, first, after};
+                  inserted = 1;
+                endif
+                new = {@new, start, finish};
+              else
+                first = min(first, start);
+                after = max(after, finish);
+              endif
+            endfor
+
+            return inserted ? new | {@new, first, after};
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["_intersect_two"], """
+            {left, right} = args;
+            result = {};
+            i = 1;
+            j = 1;
+
+            while (i < length(left) && j < length(right))
+              start = max(left[i], right[j]);
+              finish = min(left[i + 1], right[j + 1]);
+
+              if (start < finish)
+                result = {@result, start, finish};
+              endif
+
+              if (left[i + 1] < right[j + 1])
+                i = i + 2;
+              else
+                j = j + 2;
+              endif
+            endwhile
+
+            return result;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        repo.Add(su);
+    }
+
     // ── $code_utils (#59) ───────────────────────────────────────
 
     private static void AddCodeUtils(InMemoryObjectRepository repo) {
         var cu = Obj(WorldIds.CodeUtils, ObjectId.System, WorldIds.GenericUtilitiesPackage, null, "$code_utils");
         cu.Flags = ObjectFlags.Readable;
+
+        Prop(cu, "prepositions", StrList(MooPrepositions.Display));
+        Prop(cu, "_short_preps", StrList(MooPrepositions.Short));
+        Prop(cu, "_other_preps", StrList(MooPrepositions.Other));
+        Prop(cu, "_multi_preps", StrList(MooPrepositions.Multi));
+        Prop(cu, "_other_preps_n", IntList(MooPrepositions.OtherIndexes));
 
         cu.Verbs.Add(ScriptVerb(["error_name"], """
             return toliteral(@args);
@@ -635,6 +864,112 @@ public static partial class WorldSeeder {
             return match(s = args[1], "^ *#[-+]?[0-9]+ *$") ? toobj(s) | E_TYPE;;
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
+        cu.Verbs.Add(ScriptVerb(["parse_verbref"], """
+            s = args[1];
+            if (colon = index(s, ":"))
+              object = s[1..colon - 1];
+              verbname = s[colon + 1..$];
+              if (!(object && verbname))
+                return 0;
+              elseif (object[1] == "$")
+                pname = object[2..$];
+                if (!(pname in properties(#0)) || typeof(object = #0.(pname)) != OBJ)
+                  return 0;
+                endif
+                object = tostr(object);
+              endif
+              return {object, verbname};
+            else
+              return 0;
+            endif            
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        cu.Verbs.Add(ScriptVerb(["get_prep"], """
+            prep = "";
+            allpreps = {@this._short_preps, @this._other_preps};
+            rest = 1;
+            for i in [1..length(args)]
+              accum = i == 1 ? args[1] | tostr(accum, " ", args[i]);
+              if (accum in allpreps)
+                prep = accum;
+                rest = i + 1;
+              endif
+              if (!(accum in this._multi_preps))
+                return {prep, @args[rest..$]};
+              endif
+            endfor
+            return {prep, @args[rest..$]};
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        cu.Verbs.Add(ScriptVerb(["full_prep"], """
+            prep = args[1];
+            if (p = prep in this._short_preps)
+              return this.prepositions[p];
+            elseif (p = prep in this._other_preps)
+              return this.prepositions[this._other_preps_n[p]];
+            else
+              return "";
+            endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        cu.Verbs.Add(ScriptVerb(["verbname_match"], """
+            verblist = " " + args[1] + " ";
+            if (index(verblist, " " + (name = args[2]) + " ") && !(index(name, "*") || index(name, " ")))
+              "Note that if name has a * or a space in it, then it can only match one of the * verbnames";
+              return 1;
+            else
+              namelen = length(name);
+              while (star = index(verblist, "*"))
+                vstart = rindex(verblist[1..star], " ") + 1;
+                vlast = vstart + index(verblist[vstart..$], " ") - 2;
+                if (namelen >= star - vstart && (!(v = strsub(verblist[vstart..vlast], "*", "")) || index(v, verblist[vlast] == "*" ? name[1..min(namelen, length(v))] | name) == 1))
+                  return 1;
+                endif
+                verblist = verblist[vlast + 1..$];
+              endwhile
+            endif
+            return 0;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        cu.Verbs.Add(ScriptVerb(["find_verb_named"], """
+            ":find_verb_named(object,name[,n])";
+            "  returns the *number* of the first verb on object matching the given name.";
+            "  optional argument n, if given, starts the search with verb n,";
+            "  causing the first n verbs (1..n-1) to be ignored.";
+            "  0 is returned if no verb is found.";
+            "  This routine does not find inherited verbs.";
+            {object, name, ?start = 1} = args;
+            for i in [start..length(verbs(object))]
+              verbinfo = verb_info(object, i);
+              if (this:verbname_match(verbinfo[3], name))
+                return i;
+              endif
+            endfor
+            return 0;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        cu.Verbs.Add(ScriptVerb(["parse_argspec"], """
+            nargs = length(args);
+            if (nargs < 1)
+              return {{}, {}};
+            elseif ((ds = args[1]) == "tnt")
+              return {{"this", "none", "this"}, listdelete(args, 1)};
+            elseif (!(ds in {"this", "any", "none"}))
+              return tostr("\"", ds, "\" is not a valid direct object specifier.");
+            elseif (nargs < 2 || args[2] in {"none", "any"})
+              verbargs = args[1..min(3, nargs)];
+              rest = args[4..nargs];
+            elseif (!(gp = $code_utils:get_prep(@args[2..nargs]))[1])
+              return tostr("\"", args[2], "\" is not a valid preposition.");
+            else
+              verbargs = {ds, @gp[1..min(2, nargs = length(gp))]};
+              rest = gp[3..nargs];
+            endif
+            if (length(verbargs) >= 3 && !(verbargs[3] in {"this", "any", "none"}))
+              return tostr("\"", verbargs[3], "\" is not a valid indirect object specifier.");
+            endif
+            return {verbargs, rest};
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         repo.Add(cu);
 

@@ -98,7 +98,7 @@ public sealed class MooLexer {
                 ReadIdentifier(start, line, column),
 
             _ when char.IsDigit(ch) =>
-                ReadInteger(start, line, column),
+                ReadNumber(start, line, column),
 
             _ => throw new MooLexException(
                 $"Unexpected character '{ch}'.", line, column)
@@ -154,14 +154,37 @@ public sealed class MooLexer {
         return new Token(kind, text, null, start, line, column);
     }
 
-    private Token ReadInteger(int start, int line, int column) {
+    private Token ReadNumber(int start, int line, int column) {
         while (!IsAtEnd() && char.IsDigit(Current))
             Advance();
 
-        var text = _source[start.._position];
-        var value = long.Parse(text, CultureInfo.InvariantCulture);
+        var isFloat = false;
 
-        return new Token(TokenKind.Integer, text, value, start, line, column);
+        if (!IsAtEnd()
+            && Current == '.'
+            && _position + 1 < _source.Length
+            && char.IsDigit(_source[_position + 1])) {
+            isFloat = true;
+            Advance();
+
+            while (!IsAtEnd() && char.IsDigit(Current))
+                Advance();
+        }
+
+        var text = _source[start.._position];
+
+        if (isFloat) {
+            var value = double.Parse(text, CultureInfo.InvariantCulture);
+            return new Token(TokenKind.Float, text, value, start, line, column);
+        }
+
+        return new Token(
+            TokenKind.Integer,
+            text,
+            long.Parse(text, CultureInfo.InvariantCulture),
+            start,
+            line,
+            column);
     }
 
     private Token ReadObjectId(int start, int line, int column) {

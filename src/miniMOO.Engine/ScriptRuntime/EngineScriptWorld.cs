@@ -218,11 +218,22 @@ public sealed class EngineScriptWorld : IScriptWorld {
         obj.Verbs.Add(verb);
     }
 
-    public MooValue? GetVerbInfo(ObjectId id, string verbName) {
+    public MooValue GetVerbNames(ObjectId id) {
+        var obj = _objects.Get(id);
+        if (obj is null)
+            throw new MooScriptException(MooErrorCode.E_INVARG, $"Object {id} not found.");
+
+        return new MooValue.List(
+            obj.Verbs
+                .Select(verb => (MooValue)new MooValue.String(string.Join(" ", verb.Names)))
+                .ToList());
+    }
+
+    public MooValue? GetVerbInfo(ObjectId id, MooValue verbRef) {
         var obj = _objects.Get(id);
         if (obj is null) return null;
 
-        var verb = obj.Verbs.FirstOrDefault(v => v.MatchesName(verbName));
+        var verb = ResolveVerb(obj, verbRef);
         if (verb is null) return null;
 
         return new MooValue.List([
@@ -250,11 +261,33 @@ public sealed class EngineScriptWorld : IScriptWorld {
         return perms;
     }
 
-    public MooValue? GetVerbCode(ObjectId id, string verbName) {
+    public MooValue? GetVerbArgs(ObjectId id, MooValue verbRef) {
         var obj = _objects.Get(id);
         if (obj is null) return null;
 
-        var verb = obj.Verbs.FirstOrDefault(v => v.MatchesName(verbName));
+        var verb = ResolveVerb(obj, verbRef);
+        if (verb is null) return null;
+
+        return new MooValue.List([
+            new MooValue.String(VerbObjectSpecToString(verb.DirectObject)),
+        new MooValue.String(verb.Preposition),
+        new MooValue.String(VerbObjectSpecToString(verb.IndirectObject))
+        ]);
+    }
+
+    private static string VerbObjectSpecToString(VerbObjectSpec spec)
+        => spec switch {
+            VerbObjectSpec.This => "this",
+            VerbObjectSpec.Any => "any",
+            VerbObjectSpec.None => "none",
+            _ => "any"
+        };
+
+    public MooValue? GetVerbCode(ObjectId id, MooValue verbRef) {
+        var obj = _objects.Get(id);
+        if (obj is null) return null;
+
+        var verb = ResolveVerb(obj, verbRef);
         if (verb is null) return null;
 
         var code = verb.ImplementationKind == VerbImplementationKind.Script
@@ -269,6 +302,24 @@ public sealed class EngineScriptWorld : IScriptWorld {
             .ToList();
 
         return new MooValue.List(lines);
+    }
+
+    private static MooVerb? ResolveVerb(MooObject obj, MooValue verbRef)
+        => verbRef switch {
+            MooValue.String name => obj.Verbs.FirstOrDefault(v => v.MatchesName(name.Value)),
+            MooValue.Integer index when index.Value >= 1 && index.Value <= obj.Verbs.Count =>
+                obj.Verbs[(int)index.Value - 1],
+            _ => null
+        };
+
+    public MooValue GetPropertyNames(ObjectId id) {
+        var obj = _objects.Get(id)
+            ?? throw new MooScriptException(MooErrorCode.E_INVARG, $"Object {id} not found.");
+
+        return new MooValue.List(
+            obj.Properties.Keys
+                .Select(name => (MooValue)new MooValue.String(name))
+                .ToList());
     }
 
     private bool WouldContain(ObjectId objId, ObjectId destId) {

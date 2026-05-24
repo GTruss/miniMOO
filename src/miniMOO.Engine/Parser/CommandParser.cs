@@ -1,24 +1,10 @@
 ﻿using miniMOO.Core.Things;
 
+using miniMOO.Core.Language;
+
 namespace miniMOO.Engine.Parser;
 
 public sealed class CommandParser {
-    private static readonly string[] Prepositions =
-    [
-        "in",
-        "on",
-        "at",
-        "as",
-        "to",
-        "from",
-        "with",
-        "using",
-        "into",
-        "through",
-        "named",
-        "called"
-    ];
-
     private readonly ObjectMatcher _matcher;
 
     public CommandParser(ObjectMatcher matcher) {
@@ -51,16 +37,16 @@ public sealed class CommandParser {
         var args = words.Skip(1).ToList();
         var argumentText = string.Join(" ", args);
 
-        var prepIndex = FindPreposition(args);
+        var prepMatch = FindPreposition(args);
 
         string directText;
         string prep;
         string indirectText;
 
-        if (prepIndex >= 0) {
-            directText = string.Join(" ", args.Take(prepIndex));
-            prep = args[prepIndex];
-            indirectText = string.Join(" ", args.Skip(prepIndex + 1));
+        if (prepMatch.Index >= 0) {
+            directText = string.Join(" ", args.Take(prepMatch.Index));
+            prep = prepMatch.Text;
+            indirectText = string.Join(" ", args.Skip(prepMatch.Index + prepMatch.Length));
         }
         else {
             directText = argumentText;
@@ -97,13 +83,30 @@ public sealed class CommandParser {
         return input;
     }
 
-    private static int FindPreposition(IReadOnlyList<string> words) {
+    private static (int Index, int Length, string Text) FindPreposition(IReadOnlyList<string> words) {
         for (var i = 0; i < words.Count; i++) {
-            if (Prepositions.Contains(words[i], StringComparer.OrdinalIgnoreCase))
-                return i;
+            foreach (var preposition in MooPrepositions.ParserPrepositions) {
+                var prepWords = preposition.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+                if (i + prepWords.Length > words.Count)
+                    continue;
+
+                var matches = true;
+
+                for (var j = 0; j < prepWords.Length; j++) {
+                    if (string.Equals(words[i + j], prepWords[j], StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    matches = false;
+                    break;
+                }
+
+                if (matches)
+                    return (i, prepWords.Length, preposition.Canonical);
+            }
         }
 
-        return -1;
+        return (-1, 0, "");
     }
 
     private static List<string> SplitWords(string input) {

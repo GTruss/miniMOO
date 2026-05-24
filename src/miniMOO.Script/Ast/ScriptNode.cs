@@ -134,7 +134,7 @@ public sealed record ExceptClauseNode(
 public sealed record BacktickExpressionNode(
     ExpressionNode Expression,
     IReadOnlyList<ExpressionNode> ErrorCodes,
-    ExpressionNode DefaultValue) : ExpressionNode;
+    ExpressionNode? DefaultValue) : ExpressionNode;
 
 public sealed record ConditionalExpressionNode(
     ExpressionNode Condition,
@@ -159,3 +159,6 @@ public sealed record SliceAssignmentExpressionNode(
     ExpressionNode From,
     ExpressionNode To,
     ExpressionNode Value) : ExpressionNode;
+
+public sealed record FloatLiteralExpressionNode(
+    double Value) : ExpressionNode;

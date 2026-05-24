@@ -24,8 +24,10 @@ public static partial class WorldSeeder {
         Prop(sysObj, "object_utils",   new MooValue.Object(WorldIds.ObjectUtils));
         Prop(sysObj, "command_utils",   new MooValue.Object(WorldIds.CommandUtils));
         Prop(sysObj, "list_utils",   new MooValue.Object(WorldIds.ListUtils));
+        Prop(sysObj, "seq_utils",   new MooValue.Object(WorldIds.SeqUtils));
         Prop(sysObj, "code_utils",   new MooValue.Object(WorldIds.CodeUtils));
         Prop(sysObj, "build_options",   new MooValue.Object(WorldIds.BuilderOptions));
+        Prop(sysObj, "prog_options",   new MooValue.Object(WorldIds.ProgrammerOptions));
         Prop(sysObj, "nothing", new MooValue.Object(new ObjectId(-1)));
         Prop(sysObj, "failed_match", new MooValue.Object(new ObjectId(-2)));
         Prop(sysObj, "ambiguous_match", new MooValue.Object(new ObjectId(-3)));

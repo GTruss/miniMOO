@@ -489,6 +489,9 @@ public sealed class MooParser {
 
         if (Match(TokenKind.Integer))
             return new IntegerLiteralExpressionNode((long)(Previous().Value ?? 0L));
+    
+        if (Match(TokenKind.Float))
+            return new FloatLiteralExpressionNode((double)(Previous().Value ?? 0.0));
 
         if (Match(TokenKind.ObjectId))
             return new ObjectLiteralExpressionNode((long)(Previous().Value ?? 0L));
@@ -538,9 +541,10 @@ public sealed class MooParser {
             }
             while (Match(TokenKind.Comma));
 
-            Consume(TokenKind.FatArrow, "Expected '=>' after error codes.");
+            ExpressionNode? defaultVal = null;
+            if (Match(TokenKind.FatArrow))
+                defaultVal = ParseExpression();
 
-            var defaultVal = ParseExpression();
             Consume(TokenKind.Apostrophe, "Expected closing \"'\" after backtick expression.");
 
             return new BacktickExpressionNode(expr, codes, defaultVal);

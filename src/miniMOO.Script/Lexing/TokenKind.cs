@@ -5,6 +5,7 @@ public enum TokenKind {
     Identifier,
     String,
     Integer,
+    Float,
     ObjectId,
 
     LeftParen,
