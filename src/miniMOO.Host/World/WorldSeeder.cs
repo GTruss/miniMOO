@@ -19,6 +19,7 @@ namespace miniMOO.Host.World;
 ///   #9  - $note       - generic note prototype (parent: $thing)
 ///   #20 - $string_utils   - string manipulation utility object
 ///   #21 - $building_utils - building utility object (make_exit, set_names, parse_names)
+///   #41 - $gender_utils   - gender/pronoun/conjugation utility object
 ///   #52 - $object_utils   - object introspection utility object
 ///   #57 - $wiz        - generic wizard prototype (parent: $prog)
 ///   #58 - $prog       - generic programmer prototype (parent: $builder)
@@ -43,6 +44,7 @@ public static partial class WorldSeeder {
     public static readonly ObjectId PlayerStartId = WorldIds.PlayerStart;
     public static readonly ObjectId GenStringUtilsId   = WorldIds.StringUtils;
     public static readonly ObjectId GenBuildingUtilsId = WorldIds.BuildingUtils;
+    public static readonly ObjectId GenGenderUtilsId = WorldIds.GenderUtils;
     public static readonly ObjectId GenObjectUtilsId   = WorldIds.ObjectUtils;
     public static readonly ObjectId GenWizId = WorldIds.Wiz;
     public static readonly ObjectId GenProgId = WorldIds.Prog;

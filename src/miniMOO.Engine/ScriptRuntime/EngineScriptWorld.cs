@@ -227,9 +227,48 @@ public sealed class EngineScriptWorld : IScriptWorld {
 
         return new MooValue.List([
             new MooValue.Object(verb.OwnerId),
-        new MooValue.Integer((int)verb.Flags),
+        new MooValue.String(VerbPermsToString(verb.Flags)),
         new MooValue.String(string.Join(" ", verb.Names))
         ]);
+    }
+
+    private static string VerbPermsToString(VerbFlags flags) {
+        var perms = "";
+
+        if (flags.HasFlag(VerbFlags.Readable))
+            perms += "r";
+
+        if (flags.HasFlag(VerbFlags.Writable))
+            perms += "w";
+
+        if (flags.HasFlag(VerbFlags.Executable))
+            perms += "x";
+
+        if (flags.HasFlag(VerbFlags.Debug))
+            perms += "d";
+
+        return perms;
+    }
+
+    public MooValue? GetVerbCode(ObjectId id, string verbName) {
+        var obj = _objects.Get(id);
+        if (obj is null) return null;
+
+        var verb = obj.Verbs.FirstOrDefault(v => v.MatchesName(verbName));
+        if (verb is null) return null;
+
+        var code = verb.ImplementationKind == VerbImplementationKind.Script
+            ? verb.Implementation
+            : verb.Code;
+
+        var lines = code
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n')
+            .Split('\n')
+            .Select(line => (MooValue)new MooValue.String(line))
+            .ToList();
+
+        return new MooValue.List(lines);
     }
 
     private bool WouldContain(ObjectId objId, ObjectId destId) {

@@ -812,6 +812,7 @@ public sealed class MooEvaluator {
             "add_alias" => AddAlias(args),
             "add_verb" => AddVerbBuiltin(args),
             "verb_info" => VerbInfo(args),
+            "verb_code" => VerbCode(args),
             "match" => Match(args),
             "rmatch" => RMatch(args),
             "ticks_left" => TicksLeft(args),
@@ -1082,6 +1083,16 @@ public sealed class MooEvaluator {
             throw MooError(MooErrorCode.E_TYPE, "verb_info() requires an object and a verb name.");
 
         return _context.World.GetVerbInfo(obj.Value, name.Value)
+            ?? throw new MooScriptException(MooErrorCode.E_VERBNF, $"Verb not found: {name.Value}");
+    }
+
+    private MooValue VerbCode(IReadOnlyList<MooValue> args) {
+        if (args.Count < 2
+            || args[0] is not MooValue.Object obj
+            || args[1] is not MooValue.String name)
+            throw MooError(MooErrorCode.E_TYPE, "verb_code() requires an object and a verb name.");
+
+        return _context.World.GetVerbCode(obj.Value, name.Value)
             ?? throw new MooScriptException(MooErrorCode.E_VERBNF, $"Verb not found: {name.Value}");
     }
 

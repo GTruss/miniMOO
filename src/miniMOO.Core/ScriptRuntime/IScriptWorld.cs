@@ -20,5 +20,5 @@ public interface IScriptWorld {
     void AddAlias(ObjectId objId, string alias);
     void AddVerb(ObjectId objId, string verbNames, string script, ObjectId ownerId);
     MooValue? GetVerbInfo(ObjectId id, string verbName);
-
+    MooValue? GetVerbCode(ObjectId id, string verbName);
 }

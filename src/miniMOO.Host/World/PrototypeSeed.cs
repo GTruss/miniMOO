@@ -39,7 +39,13 @@ public static partial class WorldSeeder {
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         root.Verbs.Add(ScriptVerb(["tell"], """
-            notify(this, tostr(@args));
+            this:notify(tostr(@args));
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        root.Verbs.Add(ScriptVerb(["notify"], """
+            if (is_player(this))
+              notify(this, @args);
+            endif            
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         root.Verbs.Add(ScriptVerb(["look_self"], """
@@ -78,9 +84,37 @@ public static partial class WorldSeeder {
         Prop(genRoom, "name", "generic room");
         Prop(genRoom, "namec", "generic room");
         Prop(genRoom, "description", "An empty room.");
+        Prop(genRoom, "residents", new MooValue.List([]));
         Prop(genRoom, "exits", new MooValue.List([]));
         Prop(genRoom, "entrances", new MooValue.List([]));
-        Prop(genRoom, "ctype", 1);
+        Prop(genRoom, "free_home", 1);
+        Prop(genRoom, "blessed_object", MooValue.NothingValue);
+        Prop(genRoom, "ctype", 2);
+
+        genRoom.Verbs.Add(ScriptVerb(["exitfunc"], """
+            return;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genRoom.Verbs.Add(ScriptVerb(["enterfunc"], """
+            object = args[1];
+            if (is_player(object) && object.location == this)
+              player = object;
+              this:look_self(player.brief);
+            endif
+            if (object == this.blessed_object)
+              this.blessed_object = #-1;
+            endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genRoom.Verbs.Add(ScriptVerb(["basic_accept_for_abode"], """
+            who = args[1];
+            return valid(who) && (this.free_home || (typeof(residents = this.residents) == LIST ? who in this.residents | who == this.residents));
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genRoom.Verbs.Add(ScriptVerb(["accept_for_abode"], """
+            who = args[1];
+            return this:acceptable(who);
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         genRoom.Verbs.Add(ScriptVerb(["add_exit"], """
             return `this.exits = setadd(this.exits, args[1]) ! E_PERM => E_NONE' != E_PERM;
@@ -101,7 +135,25 @@ public static partial class WorldSeeder {
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         genRoom.Verbs.Add(ScriptVerb(["announce"], """
-            notify(player, tostr(@args));
+            for dude in (setremove(this:contents(), player))              
+              try
+                dude:tell(@args);
+              except (ANY)
+                "Just skip the dude with the bad :tell";
+                "continue dude;";
+              endtry
+            endfor
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genRoom.Verbs.Add(ScriptVerb(["announce_all"], """
+            for dude in (this:contents())
+              try
+                dude:tell(@args);
+              except (ANY)
+                "Just skip the dude with the bad :tell";
+                "continue dude;";
+              endtry
+            endfor
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         genRoom.Verbs.Add(ScriptVerb(["announce_all_but"], """
@@ -243,7 +295,7 @@ public static partial class WorldSeeder {
 
         const string lookScript = """
             if (dobjstr == "" && iobjstr == "")
-              this:look_self(0);
+              this:look_self(player.brief);
             elseif (valid(dobj))
               dobj:look_self();
             elseif (valid(iobj))
@@ -381,11 +433,6 @@ public static partial class WorldSeeder {
                 this:announce_msg(start, what, this:oleave_msg(what) || this:defaulting_oleave_msg(what) || "has left.");
               endif
               if (what.location == this.dest)
-
-                if (what == player)
-                  what.location:look_brief();
-                endif
-
                 if (msg = this:arrive_msg(what))
                   what:tell_lines(msg);
                 endif
@@ -474,6 +521,7 @@ public static partial class WorldSeeder {
         genPlayer.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
         Prop(genPlayer, "description", "A nondescript person.");
         Prop(genPlayer, "namec", "generic player");
+        Prop(genPlayer, "brief", 0);
             
         genPlayer.Verbs.Add(ScriptVerb(["titlec"], """
             return `this.namec ! E_PROPNF => this:title()';
@@ -487,6 +535,55 @@ public static partial class WorldSeeder {
             pass(@args);        
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
+        genPlayer.Verbs.Add(ScriptVerb(["@sethome"], """
+            here = this.location;
+            if (!$object_utils:has_callable_verb(here, "accept_for_abode"))
+              player:notify("This is a pretty odd place.  You should make your home in an actual room.");
+            elseif (here:accept_for_abode(this))
+              this.home = here;
+              player:notify(tostr(here.name, " is your new home."));
+            else
+              player:notify(tostr("This place doesn't want to be your home.  Contact ", here.owner.name, " to be added to the residents list of this place, or choose another place as your home."));
+            endif
+        """, VerbObjectSpec.None, "none", VerbObjectSpec.None));
+
+        genPlayer.Verbs.Add(ScriptVerb(["home"], """
+            start = this.location;
+            if (start == this.home)
+              player:tell("You're already home!");
+              return;
+            elseif (typeof(this.home) != OBJ)
+              player:tell("You've got a weird home, pal.  I've reset it to the default one.");
+              this.home = $player_start;
+            elseif (!valid(this.home))
+              player:tell("Oh no!  Your home's been recycled.  Time to look around for a new one.");
+              this.home = $player_start;
+            else
+              player:tell("You click your heels three times.");
+            endif
+            this:moveto(this.home);
+            if (!valid(start))
+            elseif (start == this.location)
+              start:announce(player.name, " ", $gender_utils:get_conj("learns", player), " that you can never go home...");
+            else
+              try
+                start:announce(player.name, " ", $gender_utils:get_conj("goes", player), " home.");
+              except e (E_VERBNF)
+                "start did not support announce";
+              endtry
+            endif
+            if (this.location == this.home)
+              this.location:announce(player.name, " ", $gender_utils:get_conj("comes", player), " home.");
+            elseif (this.location == start)
+              player:tell("Either home doesn't want you, or you don't really want to go.");
+            else
+              player:tell("Wait a minute!  This isn't your home...");
+              if (valid(this.location))
+                this.location:announce(player.name, " ", $gender_utils:get_conj("arrives", player), ", looking quite bewildered.");
+              endif
+            endif
+        """, VerbObjectSpec.None, "none", VerbObjectSpec.None));
+
         genPlayer.Verbs.Add(ScriptVerb(["tell_lines"], """
             lines = args[1];
             if (typeof(lines) != LIST)
@@ -499,10 +596,6 @@ public static partial class WorldSeeder {
             for line in (typeof(lines = args[1]) != LIST ? {lines} | lines)
               this:notify(tostr(line));
             endfor       
-        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
-
-        genPlayer.Verbs.Add(ScriptVerb(["notify"], """
-            player:tell(tostr(@args));
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         genPlayer.Verbs.Add(ScriptVerb(["@describe", "@desc"], """

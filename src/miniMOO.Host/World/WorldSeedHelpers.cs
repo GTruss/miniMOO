@@ -65,6 +65,12 @@ public static partial class WorldSeeder {
     private static MooValue.List ObjList(params ObjectId[] ids)
         => new(ids.Select(id => (MooValue)new MooValue.Object(id)).ToList());
 
+    private static MooValue.List StrList(params string[] values)
+        => new(values.Select(value => (MooValue)new MooValue.String(value)).ToList());
+
+    private static MooValue.List IntList(params int[] values)
+        => new(values.Select(value => (MooValue)new MooValue.Integer(value)).ToList());
+
     private static void Prop(MooObject obj, string name, string value)
         => Prop(obj, name, new MooValue.String(value));
 

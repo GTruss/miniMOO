@@ -8,6 +8,7 @@ public static partial class WorldSeeder {
         AddGenericUtilitiesPackage(repo);
         AddStringUtils(repo);
         AddBuildingUtils(repo);
+        AddGenderUtils(repo);
         AddObjectUtils(repo);
         AddListUtils(repo);
         AddCodeUtils(repo);
@@ -154,6 +155,14 @@ public static partial class WorldSeeder {
               endfor
               return l;
             endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        su.Verbs.Add(ScriptVerb(["capitalize", "capitalise"], """
+            string = args[1];
+            if (string && (i = index("abcdefghijklmnopqrstuvwxyz", string[1], 1)))
+              string[1] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[i];
+            endif
+            return string;
         """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         su.Verbs.Add(ScriptVerb(["name_and_number", "nn", "name_and_number_list", "nn_list"], """
@@ -365,9 +374,110 @@ public static partial class WorldSeeder {
 
     // ── $object_utils (#52) ───────────────────────────────────────
 
+    private static void AddGenderUtils(InMemoryObjectRepository repo) {
+        var gu = Obj(WorldIds.GenderUtils, ObjectId.System, WorldIds.GenericUtilitiesPackage, null, "$gender_utils");
+        gu.Flags = ObjectFlags.Readable;
+
+        Prop(gu, "genders", StrList(
+            "neuter", "male", "female", "either", "spivak",
+            "splat", "plural", "egotistical", "royal", "2nd"));
+        Prop(gu, "is_plural", IntList(0, 0, 0, 0, 0, 0, 1, 0, 1, 0));
+        Prop(gu, "have", StrList(
+            "has", "has", "has", "has", "has",
+            "has", "have", "have", "have", "have"));
+        Prop(gu, "be", StrList(
+            "is", "is", "is", "is", "is",
+            "is", "are", "are", "are", "are"));
+
+        gu.Verbs.Add(ScriptVerb(["get_conj", "get_conjugation"], """
+            {spec, ?object = player} = args;
+            i = index(spec + "/", "/");
+            sing = spec[1..i - 1];
+            if (i < length(spec))
+              plur = spec[i + 1..$];
+            else
+              plur = "";
+            endif
+            cap = "a" > ((i == 1) ? spec[2] | spec);
+            if (((valid(object) && (STR == typeof(g = `object.gender ! ANY => ""'))) && (i = g in this.genders)) && this.is_plural[i])
+              vb = plur || this:_verb_plural(sing, i);
+            else
+              vb = sing || this:_verb_singular(plur, i);
+            endif
+            if (cap)
+              return $string_utils:capitalize(vb);
+            else
+              return vb;
+            endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        gu.Verbs.Add(ScriptVerb(["_verb_plural"], """
+            {st, idx} = args;
+            if (typeof(st) != STR)
+              return E_INVARG;
+            endif
+            len = length(st);
+            if ((len >= 3) && (st[len - 2..$] == "n't"))
+              return this:_verb_plural(st[1..len - 3], idx) + "n't";
+            elseif (i = st in {"has", "is"})
+              return this.({"have", "be"}[i])[idx];
+            elseif (st == "was")
+              return (idx > 6) ? "were" | st;
+            elseif ((len <= 3) || (st[len] != "s"))
+              return st;
+            elseif (st[len - 1] != "e")
+              return st[1..len - 1];
+            elseif ((len >= 4) && (st[len - 3..$] == "zzes"))
+              return st[1..len - 3];
+            elseif ((len >= 4) && ((((st[len - 2] == "h") && index("cs", st[len - 3])) || index("ox", st[len - 2])) || (st[len - 3..len - 2] == "ss")))
+              return st[1..len - 2];
+            elseif (st[len - 2] == "i")
+              return st[1..len - 3] + "y";
+            else
+              return st[1..len - 1];
+            endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        gu.Verbs.Add(ScriptVerb(["_verb_singular"], """
+            {st, ?idx = 1} = args;
+            if (typeof(st) != STR)
+              return E_INVARG;
+            endif
+            len = length(st);
+            if (!len)
+              return "";
+            elseif ((len >= 3) && (st[len - 2..$] == "n't"))
+              return this:_verb_singular(st[1..len - 3], idx) + "n't";
+            elseif (i = st in {"have", "are"})
+              return this.({"have", "be"}[i])[idx];
+            elseif ((len > 1) && (st[len] == "y") && (!index("aeiou", st[len - 1])))
+              return st[1..len - 1] + "ies";
+            elseif ((len > 1) && index("sz", st[len]) && index("aeiou", st[len - 1]))
+              return (st + st[len]) + "es";
+            elseif (index("osx", st[len]) || ((len > 1) && (index("chsh", st[len - 1..len]) % 2)))
+              return st + "es";
+            else
+              return st + "s";
+            endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        repo.Add(gu);
+    }
+
     private static void AddObjectUtils(InMemoryObjectRepository repo) {
         var genObjectUtils = Obj(WorldIds.ObjectUtils, ObjectId.System, WorldIds.GenericUtilitiesPackage, null, "$object_utils");
         genObjectUtils.Flags = ObjectFlags.Readable;
+
+        genObjectUtils.Verbs.Add(ScriptVerb(["has_callable_verb"], """
+            {object, verbname} = args;
+            while (valid(object))
+              if (`index(verb_info(object, verbname)[2], "x") ! E_VERBNF => 0' && verb_code(object, verbname))
+                return {object};
+              endif
+              object = parent(object);
+            endwhile
+            return 0;
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
 
         genObjectUtils.Verbs.Add(ScriptVerb(["ancestors"], """
             ret = {};

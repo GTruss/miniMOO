@@ -560,6 +560,39 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            code = verb_code($wiz, "_test_destructure");
+            found = 0;
+
+            if (typeof(code) == LIST)
+              for line in (code)
+                if (index(line, "{a, b} = args"))
+                  found = 1;
+                endif
+              endfor
+            endif
+
+            if (found)
+              player:tell("PASS: verb_code() found");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: verb_code() found");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              verb_code(this, "definitely_not_a_verb");
+            except (E_VERBNF)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: verb_code() not found");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: verb_code() not found");
+              failed = failed + 1;
+            endif
+
             if (parent(player) == $wiz)
               player:tell("PASS: parent()");
               passed = passed + 1;
@@ -622,6 +655,40 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: toint() error conversion");
+              failed = failed + 1;
+            endif
+
+            if ($string_utils:capitalize("hello") == "Hello" && $string_utils:capitalize("Hello") == "Hello")
+              player:tell("PASS: $string_utils:capitalize()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $string_utils:capitalize()");
+              failed = failed + 1;
+            endif
+
+            if ($gender_utils:get_conj("is/are", player) == "is" && $gender_utils:get_conj("says", player) == "says")
+              player:tell("PASS: $gender_utils:get_conj() singular");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $gender_utils:get_conj() singular");
+              failed = failed + 1;
+            endif
+
+            gender_obj = create($thing);
+            gender_obj.gender = "plural";
+            if ($gender_utils:get_conj("is/are", gender_obj) == "are" && $gender_utils:get_conj("says", gender_obj) == "say")
+              player:tell("PASS: $gender_utils:get_conj() plural");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $gender_utils:get_conj() plural");
+              failed = failed + 1;
+            endif
+
+            if ($gender_utils:get_conj("Runs", player) == "Runs" && $gender_utils:get_conj("Runs", gender_obj) == "Run")
+              player:tell("PASS: $gender_utils:get_conj() capitalization");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $gender_utils:get_conj() capitalization");
               failed = failed + 1;
             endif
 

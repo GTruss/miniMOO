@@ -5,7 +5,7 @@ namespace miniMOO.Host.World;
 
 public static partial class WorldSeeder {
     private static void AddStarterWorld(InMemoryObjectRepository repo) {
-        var theVoid = Obj(WorldIds.PlayerStart, ObjectId.System, WorldIds.Room, null, "The Void");
+        var theVoid = Obj(WorldIds.PlayerStart, ObjectId.System, WorldIds.Room, null, "$player_start");
         Prop(theVoid, "description",
             "A featureless expanse. You feel like you haven't quite arrived yet.");
         repo.Add(theVoid);
