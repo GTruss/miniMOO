@@ -410,6 +410,62 @@ public static partial class WorldSeeder {
         var genThing = Obj(WorldIds.Thing, ObjectId.System, WorldIds.Root, null, "$thing");
         genThing.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
         Prop(genThing, "description", "You see nothing special about it.");
+        Prop(genThing, "take_failed_msg", "");
+        Prop(genThing, "take_succeeded_msg", "");
+        Prop(genThing, "otake_failed_msg", "");
+        Prop(genThing, "otake_succeeded_msg", "");
+        Prop(genThing, "drop_failed_msg", "");
+        Prop(genThing, "drop_succeeded_msg", "");
+        Prop(genThing, "odrop_failed_msg", "");
+        Prop(genThing, "odrop_succeeded_msg", "");
+
+        genThing.Verbs.Add(ScriptVerb(["take_failed_msg", "take_succeeded_msg", "otake_failed_msg", "otake_succeeded_msg", 
+                "drop_failed_msg", "drop_succeeded_msg", "odrop_failed_msg", "odrop_succeeded_msg"], """
+            return this.(verb);
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.This));
+
+        genThing.Verbs.Add(ScriptVerb(["drop", "d", "throw", "th"], """
+            if (this.location != player)
+              player:tell("You don't have that.");
+            elseif (!player.location:acceptable(this))
+              player:tell("You can't drop that here.");
+            else
+              this:moveto(player.location);
+              if (this.location == player.location)
+                player:tell_lines(this:drop_succeeded_msg() || "Dropped.");
+                if (msg = this:odrop_succeeded_msg())
+                  player.location:announce(player.name, " ", msg);
+                endif
+              else
+                player:tell_lines(this:drop_failed_msg() || "You can't seem to drop that here.");
+                if (msg = this:odrop_failed_msg())
+                  player.location:announce(player.name, " ", msg);
+                endif
+              endif
+            endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.None));
+
+        genThing.Verbs.Add(ScriptVerb(["get", "g", "take", "t"], """
+            if (this.location == player)
+              player:tell("You already have that!");
+            elseif (this.location != player.location)
+              player:tell("I don't see that here.");
+            else
+              this:moveto(player);
+              if (this.location == player)
+                player:tell(this:take_succeeded_msg() || "Taken.");
+                if (msg = this:otake_succeeded_msg())
+                  player.location:announce(player.name, " ", msg);
+                endif
+              else
+                player:tell(this:take_failed_msg() || "You can't pick that up.");
+                if (msg = this:otake_failed_msg())
+                  player.location:announce(player.name, " ", msg);
+                endif
+              endif
+            endif
+        """, VerbObjectSpec.This, "none", VerbObjectSpec.None));
+
         repo.Add(genThing);
     }
 
@@ -461,6 +517,10 @@ public static partial class WorldSeeder {
         """, VerbObjectSpec.Any, "as", VerbObjectSpec.Any));
 
 
+        genPlayer.Verbs.Add(ScriptVerb(["my_match_object"], """
+            return $string_utils:match_object(@{@args, this.location}[1..2], this);
+        """, VerbObjectSpec.Any));
+
 
         genPlayer.Verbs.Add(ScriptVerb(["wave"], """
             player:tell("You wave.");
@@ -482,10 +542,6 @@ public static partial class WorldSeeder {
         var genBuilder = Obj(WorldIds.Builder, ObjectId.System, WorldIds.FrandsPlayerClass, null, "$builder");
         genBuilder.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
         Prop(genBuilder, "build_options", new MooValue.List([]));
-
-        genBuilder.Verbs.Add(ScriptVerb(["my_match_object"], """
-            return $string_utils:match_object(@{@args, this.location}[1..2], this);
-        """, VerbObjectSpec.Any));
 
         genBuilder.Verbs.Add(ScriptVerb(["build_option"], """
             return $build_options:get(this.build_options, args[1]);

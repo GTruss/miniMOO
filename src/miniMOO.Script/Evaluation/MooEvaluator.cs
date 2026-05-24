@@ -1376,10 +1376,12 @@ public sealed class MooEvaluator {
         MooValue.Nothing => false,
         MooValue.Clear => false,
         MooValue.Integer i => i.Value != 0,
+        MooValue.Float f => f.Value != 0,
         MooValue.String s => s.Value.Length > 0,
-        MooValue.Object o => o.Value.Value >= 0,  // #-1 is nothing, falsy
         MooValue.List l => l.Items.Count > 0,
-        _ => true
+        MooValue.Object => false,
+        MooValue.Error => false,
+        _ => false
     };
 
     private static string MooToString(MooValue value) => value switch {
