@@ -8,6 +8,7 @@ public static partial class WorldSeeder {
         if (wiz is null)
             return;
 
+
         wiz.Verbs.Add(ScriptVerb(["@parsefail1"], """
             player:tell("before parse failure");
             value = "unterminated;
@@ -25,7 +26,7 @@ public static partial class WorldSeeder {
             return (a == "left" && b == "right");
         """));
 
-        wiz.Verbs.Add(ScriptVerb(["@test"], """
+        wiz.Verbs.Add(ScriptVerb(["@test-builtins"], """
             player:tell("Running miniMOO tests...");
 
             passed = 0;
@@ -34,6 +35,15 @@ public static partial class WorldSeeder {
             test_obj = create($thing);
             prop = "dynamic_test";
             test_obj.(prop) = 42;
+
+            root_tell = verb_code($root, "tell");
+            if (root_tell[1] == "this:notify(tostr(@args));")
+              player:tell("PASS: file-backed $root:tell");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: file-backed $root:tell");
+              failed = failed + 1;
+            endif
 
             if (test_obj.(prop) == 42)
               player:tell("PASS: dynamic property access");
@@ -1068,7 +1078,79 @@ public static partial class WorldSeeder {
             endif
 
             player:tell("---");
-            player:tell(passed, " passed, ", failed, " failed.");
+            player:tell(passed, " builtin tests passed, ", failed, " failed.");
+        """));
+
+        wiz.Verbs.Add(ScriptVerb(["@test-scripts"], """
+            player:tell("Running miniMOO script command tests...");
+
+            passed = 0;
+            failed = 0;
+
+            start = player.location;
+
+            before = length(player.contents);
+            eval_command("@create $thing named Script Test Thing,stthing");
+            if (length(player.contents) == before + 1)
+              player:tell("PASS: eval_command() @create");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @create");
+              failed = failed + 1;
+            endif
+
+            exits_before = length(start.exits);
+            eval_command("@dig testnorth,tn|testsouth,ts to Script Test Room");
+            exit = start:match_exit("tn");
+            if (length(start.exits) == exits_before + 1 && valid(exit) && exit.dest.name == "Script Test Room")
+              player:tell("PASS: eval_command() @dig creates exit and room");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @dig creates exit and room");
+              failed = failed + 1;
+            endif
+
+            eval_command("tn");
+            if (player.location == exit.dest)
+              player:tell("PASS: eval_command() exit alias movement");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() exit alias movement");
+              failed = failed + 1;
+            endif
+
+            eval_command("ts");
+            if (player.location == start)
+              player:tell("PASS: eval_command() return exit movement");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() return exit movement");
+              failed = failed + 1;
+            endif
+
+            if (eval_command("@list $player:tell"))
+              player:tell("PASS: eval_command() @list inherited verb");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @list inherited verb");
+              failed = failed + 1;
+            endif
+
+            if (eval_command("@exits"))
+              player:tell("PASS: eval_command() @exits");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @exits");
+              failed = failed + 1;
+            endif
+
+            player:tell("---");
+            player:tell(passed, " script command tests passed, ", failed, " failed.");
+        """));
+
+        wiz.Verbs.Add(ScriptVerb(["@test"], """
+            eval_command("@test-builtins");
+            eval_command("@test-scripts");
         """));
     }
 }

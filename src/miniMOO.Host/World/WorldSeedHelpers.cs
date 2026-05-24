@@ -1,8 +1,19 @@
 using miniMOO.Core.Things;
+using miniMOO.Data.FileSystem;
+using miniMOO.Engine.Repositories;
 
 namespace miniMOO.Host.World;
 
 public static partial class WorldSeeder {
+    private static string WorldDataPath(params string[] parts)
+        => Path.Combine([AppContext.BaseDirectory, "data", .. parts]);
+
+    private static void AddFileObject(InMemoryObjectRepository repo, params string[] path) {
+        var loader = new FileWorldLoader();
+        var materializer = new FileObjectMaterializer();
+        repo.Add(materializer.ToMooObject(loader.LoadObject(WorldDataPath(path))));
+    }
+
     private static MooObject Obj(
         ObjectId id,
         ObjectId ownerId,

@@ -94,6 +94,9 @@ public static class MooPrepositions {
         for (var i = 0; i < Other.Length; i++)
             prepositions.Add(new MooPreposition(Other[i], Short[OtherIndexes[i] - 1]));
 
+        prepositions.Add(new MooPreposition("named", "named"));
+        prepositions.Add(new MooPreposition("called", "called"));
+
         return prepositions
             .OrderByDescending(preposition => preposition.Text.Split(' ').Length)
             .ThenByDescending(preposition => preposition.Text.Length)

@@ -429,5 +429,6 @@ FodyWeavers.xsd
 *.msp
 
 .claude/
+.obsidian/
 
 claude-memory.md

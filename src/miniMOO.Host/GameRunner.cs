@@ -40,6 +40,11 @@ public class GameRunner {
 
         _dispatcher = new CommandDispatcher(_objects, _output, 
             _permissionService, scriptRuntime, scriptWorld, _resolver);
+        scriptWorld.SetCommandEvaluator((playerId, commandText) => {
+            var command = _parser.Parse(playerId, commandText);
+            _dispatcher.Dispatch(playerId, command);
+            return Task.CompletedTask;
+        });
 
         _terminal.WriteLine("Welcome to miniMOO!");
 

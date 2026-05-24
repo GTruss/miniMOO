@@ -12,6 +12,7 @@ public sealed class EngineScriptWorld : IScriptWorld {
     private readonly IObjectResolver _resolver;
     private readonly OutputService _output;
     private readonly IScriptRuntime _scriptRuntime;
+    private Func<ObjectId, string, Task>? _evalCommand;
 
     public EngineScriptWorld(IObjectRepository objects, IObjectResolver resolver, OutputService output,
                              IScriptRuntime scriptRuntime) {
@@ -21,6 +22,9 @@ public sealed class EngineScriptWorld : IScriptWorld {
         _output = output;
         _scriptRuntime = scriptRuntime;
     }
+
+    public void SetCommandEvaluator(Func<ObjectId, string, Task> evalCommand)
+        => _evalCommand = evalCommand;
 
     public MooObject? Get(ObjectId id)
         => _objects.Get(id);
@@ -64,6 +68,13 @@ public sealed class EngineScriptWorld : IScriptWorld {
     public Task NotifyAsync(ObjectId playerId, IReadOnlyList<MooValue> values) {
         _output.Notify(playerId, string.Concat(values.Select(value => value.ToString())));
         return Task.CompletedTask;
+    }
+
+    public Task EvalCommandAsync(ObjectId playerId, string command) {
+        if (_evalCommand is null)
+            throw new MooScriptException(MooErrorCode.E_INVARG, "eval_command() is not available.");
+
+        return _evalCommand(playerId, command);
     }
 
     public async Task<ScriptResult> InvokeVerbAsync(ScriptContext callerContext, ObjectId thisId,

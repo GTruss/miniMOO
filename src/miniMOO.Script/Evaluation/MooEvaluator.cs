@@ -803,6 +803,7 @@ public sealed class MooEvaluator {
             "tostr" => new MooValue.String(string.Concat(args.Select(MooToString))),
             "str" => new MooValue.String(args.Count > 0 ? MooToString(args[0]) : ""),
             "eval" => await EvalAsync(args),
+            "eval_command" => await EvalCommandAsync(args),
             "valid" => Valid(args),
             "is_player" => IsPlayer(args),
             "length" => Length(args),
@@ -1027,6 +1028,14 @@ public sealed class MooEvaluator {
         result.RemoveAt(zeroBasedIndex);
 
         return new MooValue.List(result);
+    }
+
+    private async Task<MooValue> EvalCommandAsync(IReadOnlyList<MooValue> args) {
+        if (args.Count < 1 || args[0] is not MooValue.String command)
+            throw MooError(MooErrorCode.E_TYPE, "eval_command() requires a command string.");
+
+        await _context.World.EvalCommandAsync(_context.PlayerId, command.Value);
+        return new MooValue.Integer(1);
     }
 
     private static MooValue ListSet(IReadOnlyList<MooValue> args) {

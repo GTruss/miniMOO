@@ -8,6 +8,7 @@ public interface IScriptWorld {
     IEnumerable<MooObject> ContentsOf(ObjectId id);
 
     Task NotifyAsync(ObjectId playerId, IReadOnlyList<MooValue> values);
+    Task EvalCommandAsync(ObjectId playerId, string command);
     Task<ScriptResult> InvokeVerbAsync(ScriptContext callerContext, ObjectId thisId, 
         string verb, IReadOnlyList<MooValue> args, ObjectId? searchFromId = null);
 
