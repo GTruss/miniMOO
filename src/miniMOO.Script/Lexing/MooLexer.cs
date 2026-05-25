@@ -276,6 +276,8 @@ public sealed class MooLexer {
             "endfor" => TokenKind.EndFor,
             "while" => TokenKind.While,
             "endwhile" => TokenKind.EndWhile,
+            "fork" => TokenKind.Fork,
+            "endfork" => TokenKind.EndFork,
             "try" => TokenKind.Try,
             "except" => TokenKind.Except,
             "endtry" => TokenKind.EndTry,

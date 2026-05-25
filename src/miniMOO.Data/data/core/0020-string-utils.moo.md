@@ -8,7 +8,7 @@ flags:
   - readable
 aliases: []
 created: 2026-05-24T15:10
-updated: 2026-05-24T19:44
+updated: 2026-05-24T21:02
 ---
 
 # $string_utils
@@ -471,6 +471,113 @@ elseif (thing[1] == "#")
 else
   return tostr("`", thing[1], "' unexpected");
 endif
+```
+
+## Verb: prefix_to_value
+
+```yaml
+names: [prefix_to_value]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+alen = length(args[1]);
+slen = length(string = this:triml(args[1]));
+if (!string)
+  return {0, "empty string"};
+elseif (w = index("{\"", string[1]))
+  result = this:({"_tolist", "_unquote"}[w])(string[2..slen]);
+  if (typeof(result[1]) != INT)
+    return result;
+  elseif (result[1] == 0)
+    return {0, "missing } or \""};
+  else
+    return {0, result[2], alen - result[1] + 1};
+  endif
+else
+  thing = string[1..tlen = index(string + " ", " ") - 1];
+  if (typeof(s = this:_toscalar(thing)) != STR)
+    return {string[tlen + 1..slen], s};
+  else
+    return {0, s, alen - slen + 1};
+  endif
+endif
+```
+
+## Verb: _unquote
+
+```yaml
+names: [_unquote]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+rest = args[1];
+result = "";
+while (m = match(rest, "\\.?%|\""))
+  "Find the next special character";
+  if (rest[pos = m[1]] == "\"")
+    return {rest[pos + 1..$], result + rest[1..pos - 1]};
+  endif
+  result = result + rest[1..pos - 1] + rest[pos + 1..m[2]];
+  rest = rest[m[2] + 1..$];
+endwhile
+return {0, result + rest};
+```
+
+## Verb: words
+
+```yaml
+names: [words]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+rest = args[1];
+"...trim leading blanks...";
+if (0)
+  rest[1..match(rest, "^ *")[2]] = "";
+endif
+rest = $string_utils:triml(rest);
+if (!rest)
+  return {};
+endif
+quote = 0;
+toklist = {};
+token = "";
+pattern = " +%|\\.?%|\"";
+while (m = match(rest, pattern))
+  "... find the next occurence of a special character, either";
+  "... a block of spaces, a quote or a backslash escape sequence...";
+  char = rest[m[1]];
+  token = token + rest[1..m[1] - 1];
+  if (char == " ")
+    toklist = {@toklist, token};
+    token = "";
+  elseif (char == "\"")
+    "... beginning or end of quoted string...";
+    "... within a quoted string spaces aren't special...";
+    pattern = (quote = !quote) ? "\\.?%|\"" | " +%|\\.?%|\"";
+  elseif (m[1] < m[2])
+    "... char has to be a backslash...";
+    "... include next char literally if there is one";
+    token = token + rest[m[2]];
+  endif
+  rest[1..m[2]] = "";
+endwhile
+return rest || char != " " ? {@toklist, token + rest} | toklist;
 ```
 
 ## Verb: word_start

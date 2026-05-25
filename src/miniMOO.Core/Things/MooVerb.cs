@@ -23,5 +23,16 @@ public sealed class MooVerb {
         => (Flags & flag) != 0;
 
     public bool MatchesName(string verb)
-        => Names.Any(name => string.Equals(name, verb, StringComparison.OrdinalIgnoreCase));
+        => Names.Any(name => VerbNameMatches(name, verb));
+
+    private static bool VerbNameMatches(string pattern, string verb) {
+        if (string.Equals(pattern, verb, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!pattern.EndsWith("*", StringComparison.Ordinal))
+            return false;
+
+        var prefix = pattern[..^1];
+        return verb.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    }
 }

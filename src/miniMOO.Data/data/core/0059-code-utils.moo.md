@@ -8,7 +8,7 @@ flags:
   - readable
 aliases: []
 created: 2026-05-24T15:10
-updated: 2026-05-24T19:49
+updated: 2026-05-24T22:16
 ---
 
 # $code_utils
@@ -308,4 +308,37 @@ if (length(verbargs) >= 3 && !(verbargs[3] in {"this", "any", "none"}))
   return tostr("\"", verbargs[3], "\" is not a valid indirect object specifier.");
 endif
 return {verbargs, rest};
+```
+
+## Verb: explain_verb_syntax
+
+```yaml
+names: [explain_verb_syntax]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+if (args[4..5] == {"none", "this"})
+  return 0;
+endif
+{thisobj, verb, adobj, aprep, aiobj} = args;
+prep_part = aprep == "any" ? "to" | this:short_prep(aprep);
+".........`any' => `to' (arbitrary),... `none' => empty string...";
+if (adobj == "this" && dobj == thisobj)
+  dobj_part = dobjstr;
+  iobj_part = !prep_part || aiobj == "none" ? "" | (aiobj == "this" ? dobjstr | iobjstr);
+elseif (aiobj == "this" && iobj == thisobj)
+  dobj_part = adobj == "any" ? dobjstr | (adobj == "this" ? iobjstr | "");
+  iobj_part = iobjstr;
+elseif (!("this" in args[3..5]))
+  dobj_part = adobj == "any" ? dobjstr | "";
+  iobj_part = prep_part && aiobj == "any" ? iobjstr | "";
+else
+  return 0;
+endif
+return tostr(verb, dobj_part ? " " + dobj_part | "", prep_part ? " " + prep_part | "", iobj_part ? " " + iobj_part | "");
 ```

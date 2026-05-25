@@ -89,6 +89,11 @@ public sealed record WhileStatementNode(
     ExpressionNode Condition,
     IReadOnlyList<StatementNode> Body) : StatementNode;
 
+public sealed record ForkStatementNode(
+    string? TaskIdVariable,
+    ExpressionNode Delay,
+    IReadOnlyList<StatementNode> Body) : StatementNode;
+
 public sealed record IndexExpressionNode(
     ExpressionNode Target,
     ExpressionNode Index) : ExpressionNode;

@@ -6,6 +6,7 @@ namespace miniMOO.Host.World;
 public static partial class WorldSeeder {
     private static void AddPrototypes(InMemoryObjectRepository repo) {
         AddRoot(repo);
+        AddLastHuhVerbs(repo);
         AddRoom(repo);
         AddExitPrototype(repo);
         AddThing(repo);
@@ -27,6 +28,10 @@ public static partial class WorldSeeder {
 
     private static void AddRoot(InMemoryObjectRepository repo) {
         AddFileObject(repo, "core", "0001-root.moo.md");
+    }
+
+    private static void AddLastHuhVerbs(InMemoryObjectRepository repo) {
+        AddFileObject(repo, "core", "0011-last-huh-verbs.moo.md");
     }
 
     private static void AddRoom(InMemoryObjectRepository repo) {

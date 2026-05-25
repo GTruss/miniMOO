@@ -18,6 +18,7 @@ public static partial class WorldSeeder {
         Prop(sysObj, "container", new MooValue.Object(WorldIds.Container));
         Prop(sysObj, "note", new MooValue.Object(WorldIds.Note));
         Prop(sysObj, "player_start", new MooValue.Object(WorldIds.PlayerStart));
+        Prop(sysObj, "last_huh", new MooValue.Object(WorldIds.LastHuhVerbs));
         Prop(sysObj, "prog", new MooValue.Object(WorldIds.Prog));
         Prop(sysObj, "wiz", new MooValue.Object(WorldIds.Wiz));
         Prop(sysObj, "string_utils",   new MooValue.Object(WorldIds.StringUtils));

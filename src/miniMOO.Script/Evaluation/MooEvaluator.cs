@@ -49,6 +49,13 @@ public sealed class MooEvaluator {
         _context = context;
     }
 
+    private MooEvaluator(ScriptContext context, IDictionary<string, MooValue> locals)
+        : this(context) {
+
+        foreach (var (key, value) in locals)
+            _locals[key] = value;
+    }
+
     public async Task<ScriptResult> ExecuteAsync(ProgramNode program) {
         try {
             MooValue? lastValue = null;
@@ -83,6 +90,9 @@ public sealed class MooEvaluator {
 
             case WhileStatementNode whileStmt:
                 return await ExecuteWhileStatementAsync(whileStmt);
+
+            case ForkStatementNode forkStmt:
+                return await ExecuteForkStatementAsync(forkStmt);
 
             case ReturnStatementNode ret: {
                     var value = ret.Value is not null
@@ -163,6 +173,57 @@ public sealed class MooEvaluator {
             foreach (var stmt in whileStmt.Body)
                 result = await ExecuteStatementAsync(stmt);
         return result;
+    }
+
+    private async Task<MooValue?> ExecuteForkStatementAsync(ForkStatementNode forkStmt) {
+        var delay = await EvaluateExpressionAsync(forkStmt.Delay) ?? MooValue.NothingValue;
+        var delaySeconds = delay switch {
+            MooValue.Integer i => i.Value,
+            MooValue.Float f => f.Value,
+            _ => throw MooError(MooErrorCode.E_TYPE, "fork delay must be a number.")
+        };
+
+        if (delaySeconds < 0)
+            throw MooError(MooErrorCode.E_INVARG, "fork delay cannot be negative.");
+
+        var locals = new Dictionary<string, MooValue>(_locals, StringComparer.OrdinalIgnoreCase);
+
+        var taskId = ScriptTaskScheduler.Schedule(
+            TimeSpan.FromSeconds(delaySeconds),
+            async (scheduledTaskId, cancellationToken) => {
+                var context = new ScriptContext {
+                    TaskId = scheduledTaskId,
+                    PlayerId = _context.PlayerId,
+                    ThisId = _context.ThisId,
+                    CallerId = _context.CallerId,
+                    Verb = _context.Verb,
+                    ArgStr = _context.ArgStr,
+                    Args = _context.Args,
+                    DirectObjectId = _context.DirectObjectId,
+                    DobjStr = _context.DobjStr,
+                    PrepStr = _context.PrepStr,
+                    IndirectObjectId = _context.IndirectObjectId,
+                    IobjStr = _context.IobjStr,
+                    World = _context.World,
+                    DefiningObjectId = _context.DefiningObjectId,
+                    Meter = new ScriptExecutionMeter(),
+                    CancellationToken = cancellationToken
+                };
+
+                if (forkStmt.TaskIdVariable is not null)
+                    locals[forkStmt.TaskIdVariable] = new MooValue.Integer(scheduledTaskId);
+
+                var result = await new MooEvaluator(context, locals)
+                    .ExecuteAsync(new ProgramNode(forkStmt.Body));
+
+                if (!result.IsSuccess && !string.IsNullOrWhiteSpace(result.Error))
+                    await context.World.NotifyAsync(context.PlayerId, [new MooValue.String(result.Error)]);
+            });
+
+        if (forkStmt.TaskIdVariable is not null)
+            _locals[forkStmt.TaskIdVariable] = new MooValue.Integer(taskId);
+
+        return new MooValue.Integer(taskId);
     }
 
     private async Task<MooValue?> ExecuteTryStatementAsync(TryStatementNode tryStmt) {
@@ -366,10 +427,12 @@ public sealed class MooEvaluator {
         return name switch {
             "player" => new MooValue.Object(_context.PlayerId),
             "this" => new MooValue.Object(_context.ThisId),
+            "caller" => new MooValue.Object(_context.CallerId),
             "verb" => new MooValue.String(_context.Verb),
             "argstr" => new MooValue.String(_context.ArgStr),
             "args" => new MooValue.List(_context.Args),
             "dobjstr" => new MooValue.String(_context.DobjStr),
+            "prepstr" => new MooValue.String(_context.PrepStr),
             "iobjstr" => new MooValue.String(_context.IobjStr),
             "dobj" => _context.DirectObjectId is { } dobjId
                 ? new MooValue.Object(dobjId)
@@ -869,11 +932,13 @@ public sealed class MooEvaluator {
             "add_verb" => AddVerbBuiltin(args),
             "add_property" => AddProperty(args),
             "verbs" => Verbs(args),
+            "all_verbs" => AllVerbs(args),
             "verb_info" => VerbInfo(args),
             "verb_args" => VerbArgs(args),
             "verb_code" => VerbCode(args),
             "set_verb_code" => SetVerbCode(args),
             "properties" => Properties(args),
+            "all_properties" => AllProperties(args),
             "property_info" => PropertyInfo(args),
             "is_clear_property" => IsClearProperty(args),
             "match" => Match(args),
@@ -934,17 +999,20 @@ public sealed class MooEvaluator {
         if (args.Count > 0)
             throw MooError(MooErrorCode.E_ARGS, "task_id() does not take arguments.");
 
-        return new MooValue.Integer(1);
+        return new MooValue.Integer(_context.TaskId);
     }
 
-    private static MooValue KillTask(IReadOnlyList<MooValue> args) {
+    private MooValue KillTask(IReadOnlyList<MooValue> args) {
         if (args.Count < 1 || args[0] is not MooValue.Integer taskId)
             throw MooError(MooErrorCode.E_TYPE, "kill_task() requires a task id.");
 
-        if (taskId.Value != 1)
+        if (taskId.Value == _context.TaskId)
+            throw new MooTaskAbortException();
+
+        if (!ScriptTaskScheduler.Kill((int)taskId.Value))
             throw MooError(MooErrorCode.E_INVARG, "Invalid task id.");
 
-        throw new MooTaskAbortException();
+        return MooValue.NothingValue;
     }
 
     // ── Helpers ───────────────────────────────────────────────────
@@ -1105,7 +1173,20 @@ public sealed class MooEvaluator {
         if (args.Count < 1 || args[0] is not MooValue.String command)
             throw MooError(MooErrorCode.E_TYPE, "eval_command() requires a command string.");
 
-        await _context.World.EvalCommandAsync(_context.PlayerId, command.Value);
+        IReadOnlyList<string>? inputLines = null;
+
+        if (args.Count >= 2) {
+            if (args[1] is not MooValue.List lines)
+                throw MooError(MooErrorCode.E_TYPE, "eval_command() input must be a list of strings.");
+
+            inputLines = lines.Items
+                .Select(line => line is MooValue.String s
+                    ? s.Value
+                    : throw MooError(MooErrorCode.E_TYPE, "eval_command() input must be a list of strings."))
+                .ToList();
+        }
+
+        await _context.World.EvalCommandAsync(_context.PlayerId, command.Value, inputLines);
         return new MooValue.Integer(1);
     }
 
@@ -1292,6 +1373,13 @@ public sealed class MooEvaluator {
         return _context.World.GetVerbNames(obj.Value);
     }
 
+    private MooValue AllVerbs(IReadOnlyList<MooValue> args) {
+        if (args.Count < 1 || args[0] is not MooValue.Object obj)
+            throw MooError(MooErrorCode.E_TYPE, "all_verbs() requires an object.");
+
+        return _context.World.GetAllVerbNames(obj.Value);
+    }
+
     private MooValue VerbInfo(IReadOnlyList<MooValue> args) {
         if (args.Count < 2
             || args[0] is not MooValue.Object obj
@@ -1349,6 +1437,13 @@ public sealed class MooEvaluator {
             throw MooError(MooErrorCode.E_TYPE, "properties() requires an object.");
 
         return _context.World.GetPropertyNames(obj.Value);
+    }
+
+    private MooValue AllProperties(IReadOnlyList<MooValue> args) {
+        if (args.Count < 1 || args[0] is not MooValue.Object obj)
+            throw MooError(MooErrorCode.E_TYPE, "all_properties() requires an object.");
+
+        return _context.World.GetAllPropertyNames(obj.Value);
     }
 
     private MooValue PropertyInfo(IReadOnlyList<MooValue> args) {
@@ -1416,7 +1511,7 @@ public sealed class MooEvaluator {
             throw MooError(MooErrorCode.E_INVARG, $"match()/rmatch() invalid pattern: {ex.Message}");
         }
 
-        if (!match.Success || match.Length == 0)
+        if (!match.Success)
             return new MooValue.List([]);
 
         var replacements = new List<MooValue>();
@@ -1703,6 +1798,9 @@ public sealed class MooEvaluator {
             string.Equals(l.Value, r.Value, StringComparison.OrdinalIgnoreCase),
         (MooValue.Object l, MooValue.Object r) => l.Value == r.Value,
         (MooValue.Error l, MooValue.Error r) => l.Code == r.Code,
+        (MooValue.List l, MooValue.List r) =>
+            l.Items.Count == r.Items.Count
+            && l.Items.Zip(r.Items).All(pair => MooEqual(pair.First, pair.Second)),
         (MooValue.Nothing, MooValue.Nothing) => true,
         _ => false
     };
@@ -1806,6 +1904,9 @@ public sealed class MooEvaluator {
         };
 
     private void Tick() {
+        if (_context.CancellationToken.IsCancellationRequested)
+            throw new MooTaskAbortException();
+
         if (!_context.Meter.TryTick(out var error))
             throw new MooScriptException(MooErrorCode.E_QUOTA, error ?? "Task quota exceeded.");
     }

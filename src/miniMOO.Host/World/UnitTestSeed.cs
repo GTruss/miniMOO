@@ -634,6 +634,15 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            avlist = all_verbs(player);
+            if ("tell" in avlist && !("tell" in verbs(player)))
+              player:tell("PASS: all_verbs()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: all_verbs()");
+              failed = failed + 1;
+            endif
+
             vnum = "_test_destructure" in vlist;
             info = verb_info($wiz, vnum);
             argspec = verb_args($wiz, vnum);
@@ -669,6 +678,15 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            aprops = all_properties(player);
+            if ("description" in aprops && "r" in aprops && !("r" in properties(player)))
+              player:tell("PASS: all_properties()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: all_properties()");
+              failed = failed + 1;
+            endif
+
             pinfo = property_info($root, "description");
             if (length(pinfo) == 2 && pinfo[1] == #0 && index(pinfo[2], "r"))
               player:tell("PASS: property_info() found");
@@ -692,6 +710,32 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: is_clear_property()");
+              failed = failed + 1;
+            endif
+
+            this._test_fork_immediate = 0;
+            parent_task = task_id();
+            fork child_task (0)
+              this._test_fork_immediate = child_task != parent_task && task_id() == child_task;
+            endfork
+            if (child_task > parent_task)
+              player:tell("PASS: fork task id assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: fork task id assignment");
+              failed = failed + 1;
+            endif
+
+            this._test_fork_cancelled = 0;
+            fork doomed_task (1)
+              this._test_fork_cancelled = 1;
+            endfork
+            kill_task(doomed_task);
+            if (!this._test_fork_cancelled)
+              player:tell("PASS: kill_task() queued fork");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: kill_task() queued fork");
               failed = failed + 1;
             endif
 
@@ -1234,6 +1278,69 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: eval_command() @exits");
+              failed = failed + 1;
+            endif
+
+            eval_command("@create $thing named Script Test Toy,sttoy");
+            toy = player:match("sttoy");
+            if (valid(toy))
+              player:tell("PASS: eval_command() @create test toy");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @create test toy");
+              failed = failed + 1;
+            endif
+
+            eval_command("@property sttoy.wound");
+            if ($object_utils:has_property(toy, "wound") && toy.wound == 0)
+              player:tell("PASS: eval_command() @property");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @property");
+              failed = failed + 1;
+            endif
+
+            eval_command("@set sttoy.wound to 1");
+            if (toy.wound == 1)
+              player:tell("PASS: eval_command() @set");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @set");
+              failed = failed + 1;
+            endif
+
+            eval_command("@verb sttoy:wind this");
+            if ($object_utils:has_verb(toy, "wind"))
+              player:tell("PASS: eval_command() @verb");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @verb");
+              failed = failed + 1;
+            endif
+
+            eval_command("@program sttoy:wind", {"player:tell(\"Script toy winds.\");", "."});
+            code = verb_code(toy, "wind");
+            if (length(code) == 1 && $string_utils:trim(code[1]) == "player:tell(\"Script toy winds.\");")
+              player:tell("PASS: eval_command() @program");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @program");
+              failed = failed + 1;
+            endif
+
+            if (eval_command("@list sttoy:wind"))
+              player:tell("PASS: eval_command() @list programmed verb");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @list programmed verb");
+              failed = failed + 1;
+            endif
+
+            if (eval_command("wind sttoy"))
+              player:tell("PASS: eval_command() programmed verb execution");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() programmed verb execution");
               failed = failed + 1;
             endif
 

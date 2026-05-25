@@ -8,7 +8,7 @@ flags:
   - readable
 aliases: []
 created: 2026-05-24T15:10
-updated: 2026-05-24T16:08
+updated: 2026-05-24T21:23
 ---
 
 # $object_utils
@@ -270,4 +270,20 @@ try
 except (E_PROPNF, E_INVIND)
   return 0;
 endtry
+```
+
+## Verb: all_properties, all_verbs
+
+```yaml
+names: ["all_properties", "all_verbs"]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+what = args[1];
+return verb == "all_verbs" ? all_verbs(what) | all_properties(what);
 ```

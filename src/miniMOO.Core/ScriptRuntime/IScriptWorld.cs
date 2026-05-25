@@ -9,7 +9,7 @@ public interface IScriptWorld {
 
     Task NotifyAsync(ObjectId playerId, IReadOnlyList<MooValue> values);
     Task<MooValue> ReadInputAsync(ObjectId playerId);
-    Task EvalCommandAsync(ObjectId playerId, string command);
+    Task EvalCommandAsync(ObjectId playerId, string command, IReadOnlyList<string>? inputLines = null);
     Task<ScriptResult> InvokeVerbAsync(ScriptContext callerContext, ObjectId thisId, 
         string verb, IReadOnlyList<MooValue> args, ObjectId? searchFromId = null);
 
@@ -25,11 +25,13 @@ public interface IScriptWorld {
     long AddVerb(ObjectId objId, ObjectId ownerId, VerbFlags flags, string verbNames,
         VerbObjectSpec directObject, string preposition, VerbObjectSpec indirectObject);
     MooValue GetVerbNames(ObjectId id);
+    MooValue GetAllVerbNames(ObjectId id);
     MooValue? GetVerbInfo(ObjectId id, MooValue verbRef);
     MooValue? GetVerbArgs(ObjectId id, MooValue verbRef);
     MooValue? GetVerbCode(ObjectId id, MooValue verbRef);
     void SetVerbCode(ObjectId id, MooValue verbRef, IReadOnlyList<string> codeLines);
     MooValue GetPropertyNames(ObjectId id);
+    MooValue GetAllPropertyNames(ObjectId id);
     MooValue? GetPropertyInfo(ObjectId id, string propName);
     bool IsClearProperty(ObjectId id, string propName);
 }

@@ -13,6 +13,7 @@ public static class WorldIds {
     public static readonly ObjectId Container = new(8);
     public static readonly ObjectId Note = new(9);
     public static readonly ObjectId PlayerStart = new(10);
+    public static readonly ObjectId LastHuhVerbs = new(11);
 
     public static readonly ObjectId StringUtils   = new(20);
     public static readonly ObjectId BuildingUtils = new(21);

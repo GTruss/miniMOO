@@ -14,6 +14,7 @@ public sealed class EngineScriptWorld : IScriptWorld {
     private readonly IScriptRuntime _scriptRuntime;
     private Func<ObjectId, string, Task>? _evalCommand;
     private Func<ObjectId, Task<string?>>? _readInput;
+    private readonly Dictionary<ObjectId, Stack<Queue<string>>> _scriptedInput = new();
 
     public EngineScriptWorld(IObjectRepository objects, IObjectResolver resolver, OutputService output,
                              IScriptRuntime scriptRuntime) {
@@ -75,6 +76,11 @@ public sealed class EngineScriptWorld : IScriptWorld {
     }
 
     public async Task<MooValue> ReadInputAsync(ObjectId playerId) {
+        if (_scriptedInput.TryGetValue(playerId, out var inputStack)
+            && inputStack.Count > 0
+            && inputStack.Peek().Count > 0)
+            return new MooValue.String(inputStack.Peek().Dequeue());
+
         if (_readInput is null)
             throw new MooScriptException(MooErrorCode.E_INVARG, "read() is not available.");
 
@@ -86,11 +92,31 @@ public sealed class EngineScriptWorld : IScriptWorld {
         return new MooValue.String(line);
     }
 
-    public Task EvalCommandAsync(ObjectId playerId, string command) {
+    public async Task EvalCommandAsync(ObjectId playerId, string command, IReadOnlyList<string>? inputLines = null) {
         if (_evalCommand is null)
             throw new MooScriptException(MooErrorCode.E_INVARG, "eval_command() is not available.");
 
-        return _evalCommand(playerId, command);
+        if (inputLines is null) {
+            await _evalCommand(playerId, command);
+            return;
+        }
+
+        if (!_scriptedInput.TryGetValue(playerId, out var inputStack)) {
+            inputStack = new Stack<Queue<string>>();
+            _scriptedInput[playerId] = inputStack;
+        }
+
+        inputStack.Push(new Queue<string>(inputLines));
+
+        try {
+            await _evalCommand(playerId, command);
+        }
+        finally {
+            inputStack.Pop();
+
+            if (inputStack.Count == 0)
+                _scriptedInput.Remove(playerId);
+        }
     }
 
     public async Task<ScriptResult> InvokeVerbAsync(ScriptContext callerContext, ObjectId thisId,
@@ -108,12 +134,14 @@ public sealed class EngineScriptWorld : IScriptWorld {
         var context = new ScriptContext {
             PlayerId = callerContext.PlayerId,
             ThisId = thisId,
+            CallerId = callerContext.ThisId,
             Verb = verb,
             ArgStr = string.Concat(args.Select(arg => arg.ToString())),
             Args = args,
             DirectObjectId = callerContext.DirectObjectId,
             IndirectObjectId = callerContext.IndirectObjectId,
             DobjStr = callerContext.DobjStr,
+            PrepStr = callerContext.PrepStr,
             IobjStr = callerContext.IobjStr,
             DefiningObjectId = definingId,
             World = this,
@@ -303,6 +331,17 @@ public sealed class EngineScriptWorld : IScriptWorld {
                 .ToList());
     }
 
+    public MooValue GetAllVerbNames(ObjectId id) {
+        if (_objects.Get(id) is null)
+            throw new MooScriptException(MooErrorCode.E_INVARG, $"Object {id} not found.");
+
+        return new MooValue.List(
+            _resolver.SelfAndAncestors(id)
+                .SelectMany(obj => obj.Verbs)
+                .Select(verb => (MooValue)new MooValue.String(string.Join(" ", verb.Names)))
+                .ToList());
+    }
+
     public MooValue? GetVerbInfo(ObjectId id, MooValue verbRef) {
         var obj = _objects.Get(id);
         if (obj is null) return null;
@@ -405,6 +444,23 @@ public sealed class EngineScriptWorld : IScriptWorld {
             obj.Properties.Keys
                 .Select(name => (MooValue)new MooValue.String(name))
                 .ToList());
+    }
+
+    public MooValue GetAllPropertyNames(ObjectId id) {
+        if (_objects.Get(id) is null)
+            throw new MooScriptException(MooErrorCode.E_INVARG, $"Object {id} not found.");
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var names = new List<MooValue>();
+
+        foreach (var obj in _resolver.SelfAndAncestors(id)) {
+            foreach (var name in obj.Properties.Keys) {
+                if (seen.Add(name))
+                    names.Add(new MooValue.String(name));
+            }
+        }
+
+        return new MooValue.List(names);
     }
 
     public MooValue? GetPropertyInfo(ObjectId id, string propName) {

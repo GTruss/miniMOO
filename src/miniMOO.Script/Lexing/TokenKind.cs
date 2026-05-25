@@ -54,6 +54,8 @@ public enum TokenKind {
     EndFor,
     While,
     EndWhile,
+    Fork,
+    EndFork,
 
     Try,
     Except,

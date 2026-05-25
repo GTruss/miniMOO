@@ -9,7 +9,7 @@ flags:
   - fertile
 aliases: []
 created: 2026-05-24T14:35
-updated: 2026-05-24T16:36
+updated: 2026-05-24T22:35
 ---
 
 # $player
@@ -42,6 +42,12 @@ value: -79
 
 ```yaml
 name: display_options
+type: list
+value: []
+```
+
+```yaml
+name: features
 type: list
 value: []
 ```
@@ -420,4 +426,120 @@ if (vrbs)
  elseif (printed_working_msg)
    player:notify("No obvious verbs found.");
  endif
+```
+
+## Verb: @messages
+
+```yaml
+names: ["@messages"]
+dobj: any
+prep: none
+iobj: none
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+set_task_perms(player);
+if (dobjstr == "")
+  player:notify(tostr("Usage:  ", verb, " <object>"));
+  return;
+endif
+dobj = player:my_match_object(dobjstr);
+if ($command_utils:object_match_failed(dobj, dobjstr))
+  return;
+endif
+found_one = 0;
+props = $object_utils:all_properties(dobj);
+if (typeof(props) == ERR)
+  player:notify("You can't read the messages on that.");
+  return;
+endif
+for pname in (props)
+  len = length(pname);
+  if (len > 4 && pname[len - 3..len] == "_msg")
+    found_one = 1;
+    msg = `dobj.(pname) ! ANY';
+    if (msg == E_PERM)
+      value = "isn't readable by you.";
+    elseif (!msg)
+      value = "isn't set.";
+    elseif (typeof(msg) == LIST)
+      value = "is a list.";
+    elseif (typeof(msg) != STR)
+      value = "is corrupted! **";
+    else
+      value = "is " + $string_utils:print(msg);
+    endif
+    player:notify(tostr("@", pname[1..len - 4], " ", dobjstr, " ", value));
+  endif
+endfor
+if (!found_one)
+  player:notify("That object doesn't have any messages to set.");
+endif
+```
+
+## Verb: my_huh
+
+```yaml
+names: ["my_huh"]
+dobj: any
+prep: none
+iobj: none
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+verb = args[1];
+pass = args[2];
+plist = {"any", prepstr ? $code_utils:full_prep(prepstr) | "none"};
+dlist = dobjstr ? {"any"} | {"none", "any"};
+ilist = iobjstr ? {"any"} | {"none", "any"};
+for fobj in (this.features)
+  if (!$recycler:valid(fobj))
+    this:remove_feature(fobj);
+  elseif (`valid(loc = $object_utils:has_callable_verb(fobj, verb)[1]) ! ANY => 0')
+    vargs = verb_args(loc, verb);
+    if (vargs[2] in plist && (vargs[1] in dlist && vargs[3] in ilist))
+      "(got rid of notify_huh - should write a @which command)";
+      "if (this.notify_huh)";
+      "player:notify(tostr(\"Using \", what.name, \" (\", what, \")\"));";
+      "endif";
+      set_task_perms(permissions);
+      fobj:(verb)(@pass);
+      "Problem with verbs of the same name. If we use which=vrb in the loop instead, we have a problem with verbs that use the variable verb.";
+      return 1;
+    endif
+  endif
+  if ($command_utils:running_out_of_time())
+    player:tell("You have too many features.  Parsing your command runs out of ticks while checking ", fobj.name, " (", fobj, ").");
+    return 1;
+  endif
+endfor
+```
+
+## Verb: last_huh
+
+```yaml
+names: ["last_huh"]
+dobj: any
+prep: none
+iobj: none
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+{command, command_args} = args;
+if (command[1] == "@" && prepstr == "is")
+  set_task_perms(player);
+  $last_huh:(command)(@command_args);
+  return 1;
+elseif (command in {"give", "hand", "get", "take", "drop", "throw"})
+  $last_huh:(command)(@command_args);
+  return 1;
+else
+  return 0;
+endif
 ```

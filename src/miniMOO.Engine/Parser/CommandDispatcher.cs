@@ -47,6 +47,9 @@ public sealed class CommandDispatcher {
         var resolved = FindCommandVerb(player, command);
 
         if (resolved is null) {
+            if (TryRunHuhFallback(playerId, player, command))
+                return;
+
             _output.Notify(playerId, "I couldn't understand that.");
             return;
         }
@@ -67,6 +70,21 @@ public sealed class CommandDispatcher {
 
         if (!result.IsSuccess && !string.IsNullOrWhiteSpace(result.Message))
             _output.Notify(playerId, result.Message);
+    }
+
+    private bool TryRunHuhFallback(ObjectId playerId, MooObject player, ParsedCommand command) {
+        if (player.LocationId is not { } locationId)
+            return false;
+
+        if (!TryFindVerbByNameIgnoringSpec(locationId, "huh", out var huhVerb))
+            return false;
+
+        var result = ExecuteScript(playerId, locationId, command, huhVerb);
+
+        if (!result.IsSuccess && !string.IsNullOrWhiteSpace(result.Message))
+            _output.Notify(playerId, result.Message);
+
+        return true;
     }
 
     private ResolvedVerb? FindCommandVerb(MooObject player, ParsedCommand command) {
@@ -125,6 +143,7 @@ public sealed class CommandDispatcher {
         var scriptContext = new ScriptContext {
             PlayerId = playerId,
             ThisId = thisId,
+            CallerId = new ObjectId(-1),
             Verb = command.Verb,
             ArgStr = command.ArgumentText,
             Args = command.Arguments
@@ -133,6 +152,7 @@ public sealed class CommandDispatcher {
             DirectObjectId = command.DirectObject?.ObjectId,
             IndirectObjectId = command.IndirectObject?.ObjectId,
             DobjStr = command.DirectObjectText ?? "",
+            PrepStr = command.Preposition,
             IobjStr = command.IndirectObjectText ?? "",
             World = _scriptWorld
         };

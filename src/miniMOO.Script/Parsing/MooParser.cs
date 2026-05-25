@@ -32,6 +32,7 @@ public sealed class MooParser {
         if (Check(TokenKind.For)) return ParseForStatement();
         if (Check(TokenKind.Return)) return ParseReturnStatement();
         if (Check(TokenKind.While)) return ParseWhileStatement();
+        if (Check(TokenKind.Fork)) return ParseForkStatement();
         if (Check(TokenKind.Try)) return ParseTryStatement();
 
         var expression = ParseExpression();
@@ -101,6 +102,23 @@ public sealed class MooParser {
         return new WhileStatementNode(condition, body);
     }
 
+    private ForkStatementNode ParseForkStatement() {
+        Consume(TokenKind.Fork, "Expected 'fork'.");
+
+        string? taskIdVariable = null;
+        if (Check(TokenKind.Identifier))
+            taskIdVariable = Advance().Text;
+
+        Consume(TokenKind.LeftParen, "Expected '(' after 'fork'.");
+        var delay = ParseExpression();
+        Consume(TokenKind.RightParen, "Expected ')' after fork delay.");
+
+        var body = ParseBlock();
+        Consume(TokenKind.EndFork, "Expected 'endfork'.");
+
+        return new ForkStatementNode(taskIdVariable, delay, body);
+    }
+
     private StatementNode ParseTryStatement() {
         Consume(TokenKind.Try, "Expected 'try'.");
         var body = ParseBlock();
@@ -165,6 +183,7 @@ public sealed class MooParser {
         || Check(TokenKind.ElseIf)
         || Check(TokenKind.EndFor)
         || Check(TokenKind.EndWhile)
+        || Check(TokenKind.EndFork)
         || Check(TokenKind.Except)
         || Check(TokenKind.EndTry)
         || Check(TokenKind.EndOfFile);
