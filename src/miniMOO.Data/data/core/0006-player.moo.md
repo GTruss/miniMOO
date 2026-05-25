@@ -9,7 +9,7 @@ flags:
   - fertile
 aliases: []
 created: 2026-05-24T14:35
-updated: 2026-05-24T22:35
+updated: 2026-05-25T06:51
 ---
 
 # $player
@@ -541,5 +541,28 @@ elseif (command in {"give", "hand", "get", "take", "drop", "throw"})
   return 1;
 else
   return 0;
+endif
+```
+
+## Verb: @describe
+
+```yaml
+names: ["@desc*ribe"]
+dobj: any
+prep: as
+iobj: any
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+set_task_perms(player);
+dobj = player:my_match_object(dobjstr);
+if ($command_utils:object_match_failed(dobj, dobjstr))
+  "...lose...";
+elseif (e = dobj:set_description(iobjstr))
+  player:notify("Description set.");
+else
+  player:notify(tostr(e));
 endif
 ```

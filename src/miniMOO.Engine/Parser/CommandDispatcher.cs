@@ -8,7 +8,7 @@ using miniMOO.Script.Evaluation;
 namespace miniMOO.Engine.Parser;
 
 public sealed class CommandDispatcher {
-    private readonly record struct ResolvedVerb(ObjectId ThisId, MooVerb Verb);
+    private readonly record struct ResolvedVerb(ObjectId ThisId, ObjectId DefiningObjectId, MooVerb Verb);
 
     private readonly IObjectRepository _objects;
     private readonly OutputService _output;
@@ -54,7 +54,7 @@ public sealed class CommandDispatcher {
             return;
         }
 
-        var (thisId, verb) = resolved.Value;
+        var (thisId, definingObjectId, verb) = resolved.Value;
 
         var context = new VerbContext {
             PlayerId = playerId,
@@ -66,7 +66,7 @@ public sealed class CommandDispatcher {
             Resolver = _resolver
         };
 
-        var result = ExecuteScript(playerId, thisId, command, verb);
+        var result = ExecuteScript(playerId, thisId, definingObjectId, command, verb);
 
         if (!result.IsSuccess && !string.IsNullOrWhiteSpace(result.Message))
             _output.Notify(playerId, result.Message);
@@ -76,10 +76,10 @@ public sealed class CommandDispatcher {
         if (player.LocationId is not { } locationId)
             return false;
 
-        if (!TryFindVerbByNameIgnoringSpec(locationId, "huh", out var huhVerb))
+        if (!TryFindVerbByNameIgnoringSpec(locationId, "huh", out var huhVerb, out var definingObjectId))
             return false;
 
-        var result = ExecuteScript(playerId, locationId, command, huhVerb);
+        var result = ExecuteScript(playerId, locationId, definingObjectId, command, huhVerb);
 
         if (!result.IsSuccess && !string.IsNullOrWhiteSpace(result.Message))
             _output.Notify(playerId, result.Message);
@@ -88,63 +88,77 @@ public sealed class CommandDispatcher {
     }
 
     private ResolvedVerb? FindCommandVerb(MooObject player, ParsedCommand command) {
-        if (TryFindVerbOn(player.Id, command.Verb, command, out var playerVerb))
-            return new ResolvedVerb(player.Id, playerVerb);
+        if (TryFindVerbOn(player.Id, command.Verb, command, out var playerVerb, out var playerDefiningId))
+            return new ResolvedVerb(player.Id, playerDefiningId, playerVerb);
 
         if (player.LocationId is { } locationId) {
-            if (TryFindVerbOn(locationId, command.Verb, command, out var locationVerb))
-                return new ResolvedVerb(locationId, locationVerb);
+            if (TryFindVerbOn(locationId, command.Verb, command, out var locationVerb, out var locationDefiningId))
+                return new ResolvedVerb(locationId, locationDefiningId, locationVerb);
 
             foreach (var exitId in ExitIdsOf(locationId)) {
-                if (TryFindVerbOn(exitId, command.Verb, command, out var exitVerb))
-                    return new ResolvedVerb(exitId, exitVerb);
+                if (TryFindVerbOn(exitId, command.Verb, command, out var exitVerb, out var exitDefiningId))
+                    return new ResolvedVerb(exitId, exitDefiningId, exitVerb);
 
                 if (ExitMatchesCommand(exitId, command.Verb) &&
-                    TryFindVerbByNameIgnoringSpec(exitId, "invoke", out var invokeVerb))
-                    return new ResolvedVerb(exitId, invokeVerb);
+                    TryFindVerbByNameIgnoringSpec(exitId, "invoke", out var invokeVerb, out var invokeDefiningId))
+                    return new ResolvedVerb(exitId, invokeDefiningId, invokeVerb);
             }
 
             foreach (var obj in _objects.ContentsOf(locationId)) {
-                if (TryFindVerbOn(obj.Id, command.Verb, command, out var contentsVerb))
-                    return new ResolvedVerb(obj.Id, contentsVerb);
+                if (TryFindVerbOn(obj.Id, command.Verb, command, out var contentsVerb, out var contentsDefiningId))
+                    return new ResolvedVerb(obj.Id, contentsDefiningId, contentsVerb);
             }
         }
 
         if (command.DirectObject?.Kind == MatchResultKind.Found &&
             command.DirectObject.ObjectId is { } directId &&
-            TryFindVerbOn(directId, command.Verb, command, out var directVerb))
-            return new ResolvedVerb(directId, directVerb);
+            TryFindVerbOn(directId, command.Verb, command, out var directVerb, out var directDefiningId))
+            return new ResolvedVerb(directId, directDefiningId, directVerb);
 
         if (command.IndirectObject?.Kind == MatchResultKind.Found &&
             command.IndirectObject.ObjectId is { } indirectId &&
-            TryFindVerbOn(indirectId, command.Verb, command, out var indirectVerb))
-            return new ResolvedVerb(indirectId, indirectVerb);
+            TryFindVerbOn(indirectId, command.Verb, command, out var indirectVerb, out var indirectDefiningId))
+            return new ResolvedVerb(indirectId, indirectDefiningId, indirectVerb);
 
         return null;
     }
 
-    private bool TryFindVerbOn(ObjectId startId, string name, ParsedCommand command, out MooVerb verb) {
+    private bool TryFindVerbOn(
+        ObjectId startId,
+        string name,
+        ParsedCommand command,
+        out MooVerb verb,
+        out ObjectId definingObjectId) {
+
         foreach (var obj in _resolver.SelfAndAncestors(startId)) {
             var found = obj.Verbs.FirstOrDefault(v =>
                 v.MatchesName(name) && SpecMatches(v, command, startId));
 
             if (found is not null) {
                 verb = found;
+                definingObjectId = obj.Id;
                 return true;
             }
         }
 
         verb = null!;
+        definingObjectId = ObjectId.Nothing;
         return false;
     }
 
-    private VerbResult ExecuteScript(ObjectId playerId, ObjectId thisId, ParsedCommand command, MooVerb verb) {
+    private VerbResult ExecuteScript(
+        ObjectId playerId,
+        ObjectId thisId,
+        ObjectId definingObjectId,
+        ParsedCommand command,
+        MooVerb verb) {
 
         var scriptContext = new ScriptContext {
             PlayerId = playerId,
             ThisId = thisId,
             CallerId = new ObjectId(-1),
             Verb = command.Verb,
+            Debug = verb.Flags.HasFlag(VerbFlags.Debug),
             ArgStr = command.ArgumentText,
             Args = command.Arguments
                 .Select(arg => (MooValue)new MooValue.String(arg))
@@ -154,7 +168,8 @@ public sealed class CommandDispatcher {
             DobjStr = command.DirectObjectText ?? "",
             PrepStr = command.Preposition,
             IobjStr = command.IndirectObjectText ?? "",
-            World = _scriptWorld
+            World = _scriptWorld,
+            DefiningObjectId = definingObjectId
         };
 
         ScriptResult result;
@@ -237,17 +252,24 @@ public sealed class CommandDispatcher {
             string.Equals(alias, commandName, StringComparison.OrdinalIgnoreCase));
     }
 
-    private bool TryFindVerbByNameIgnoringSpec(ObjectId startId, string name, out MooVerb verb) {
+    private bool TryFindVerbByNameIgnoringSpec(
+        ObjectId startId,
+        string name,
+        out MooVerb verb,
+        out ObjectId definingObjectId) {
+
         foreach (var obj in _resolver.SelfAndAncestors(startId)) {
             var found = obj.Verbs.FirstOrDefault(v => v.MatchesName(name));
 
             if (found is not null) {
                 verb = found;
+                definingObjectId = obj.Id;
                 return true;
             }
         }
 
         verb = null!;
+        definingObjectId = ObjectId.Nothing;
         return false;
     }
 

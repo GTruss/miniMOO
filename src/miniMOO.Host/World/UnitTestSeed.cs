@@ -1179,6 +1179,38 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            r = random(5);
+            if (r >= 1 && r <= 5)
+              player:tell("PASS: random() range");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: random() range");
+              failed = failed + 1;
+            endif
+
+            r = random();
+            if (typeof(r) == INT && r >= 0)
+              player:tell("PASS: random() no args");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: random() no args");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              random(0);
+            except (E_INVARG)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: random() E_INVARG");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: random() E_INVARG");
+              failed = failed + 1;
+            endif
+
             seq = $seq_utils:from_string("10...12,15");
             if (length(seq) == 4 && seq[1] == 10 && seq[2] == 13 && seq[3] == 15 && seq[4] == 16)
               player:tell("PASS: $seq_utils:from_string()");
@@ -1309,12 +1341,30 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            eval_command("@startup sttoy is \"starts rolling.\"");
+            if (toy.startup_msg == "starts rolling.")
+              player:tell("PASS: eval_command() @message assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @message assignment");
+              failed = failed + 1;
+            endif
+
             eval_command("@verb sttoy:wind this");
             if ($object_utils:has_verb(toy, "wind"))
               player:tell("PASS: eval_command() @verb");
               passed = passed + 1;
             else
               player:tell("FAIL: eval_command() @verb");
+              failed = failed + 1;
+            endif
+
+            eval_command("@verb sttoy:\"d*rop th*row\" this");
+            if ($object_utils:has_verb(toy, "drop") && $object_utils:has_verb(toy, "throw"))
+              player:tell("PASS: eval_command() @verb quoted wildcard names");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @verb quoted wildcard names");
               failed = failed + 1;
             endif
 
@@ -1328,11 +1378,38 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            eval_command("@program sttoy:drop", {"pass(@args);", "player:tell(\"Script toy drops.\");", "."});
+            code = verb_code(toy, "throw");
+            if (length(code) == 2 && $string_utils:trim(code[1]) == "pass(@args);" && $string_utils:trim(code[2]) == "player:tell(\"Script toy drops.\");")
+              player:tell("PASS: eval_command() @program wildcard verb");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @program wildcard verb");
+              failed = failed + 1;
+            endif
+
+            eval_command("drop sttoy");
+            if (toy.location == player.location)
+              player:tell("PASS: eval_command() command pass()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() command pass()");
+              failed = failed + 1;
+            endif
+
             if (eval_command("@list sttoy:wind"))
               player:tell("PASS: eval_command() @list programmed verb");
               passed = passed + 1;
             else
               player:tell("FAIL: eval_command() @list programmed verb");
+              failed = failed + 1;
+            endif
+
+            if (eval_command("@display sttoy:"))
+              player:tell("PASS: eval_command() @display verbs");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @display verbs");
               failed = failed + 1;
             endif
 

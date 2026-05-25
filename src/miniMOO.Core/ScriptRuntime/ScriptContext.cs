@@ -9,6 +9,7 @@ public sealed class ScriptContext {
     public ObjectId CallerId { get; init; } = new(-1);
 
     public required string Verb { get; init; }
+    public bool Debug { get; init; }
     public required string ArgStr { get; init; }
     public required IReadOnlyList<MooValue> Args { get; init; }
 

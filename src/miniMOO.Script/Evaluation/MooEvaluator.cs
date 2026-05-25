@@ -197,6 +197,7 @@ public sealed class MooEvaluator {
                     ThisId = _context.ThisId,
                     CallerId = _context.CallerId,
                     Verb = _context.Verb,
+                    Debug = _context.Debug,
                     ArgStr = _context.ArgStr,
                     Args = _context.Args,
                     DirectObjectId = _context.DirectObjectId,
@@ -752,6 +753,9 @@ public sealed class MooEvaluator {
         var result = await _context.World.InvokeVerbAsync(_context, obj.Value, verbCall.VerbName, args);
 
         if (!result.IsSuccess) {
+            if (TryConvertNonDebugError(result, out var errorValue))
+                return errorValue;
+
             if (result.ErrorDetail is not null)
                 throw new MooScriptException(result.ErrorDetail);
 
@@ -772,6 +776,9 @@ public sealed class MooEvaluator {
         var result = await _context.World.InvokeVerbAsync(_context, obj.Value, verbName, args);
 
         if (!result.IsSuccess) {
+            if (TryConvertNonDebugError(result, out var errorValue))
+                return errorValue;
+
             if (result.ErrorDetail is not null)
                 throw new MooScriptException(result.ErrorDetail);
 
@@ -953,6 +960,7 @@ public sealed class MooEvaluator {
             "abs" => Abs(args),
             "min" => MinMax(args, findMin: true),
             "max" => MinMax(args, findMin: false),
+            "random" => Random(args),
             _ => throw new MooEvaluationException($"Unknown function: {functionCall.FunctionName}")
         };
     }
@@ -971,6 +979,9 @@ public sealed class MooEvaluator {
             _context, _context.ThisId, _context.Verb, args, searchFromId: parentId);
 
         if (!result.IsSuccess) {
+            if (TryConvertNonDebugError(result, out var errorValue))
+                return errorValue;
+
             if (result.ErrorDetail is not null)
                 throw new MooScriptException(result.ErrorDetail);
 
@@ -1632,6 +1643,22 @@ public sealed class MooEvaluator {
         _ => throw MooError(MooErrorCode.E_TYPE, $"{functionName}() requires numbers.")
     };
 
+    private static MooValue Random(IReadOnlyList<MooValue> args) {
+        if (args.Count > 1)
+            throw MooError(MooErrorCode.E_ARGS, "random() takes at most one argument.");
+
+        if (args.Count == 0)
+            return new MooValue.Integer(System.Random.Shared.NextInt64(0, int.MaxValue));
+
+        if (args[0] is not MooValue.Integer max)
+            throw MooError(MooErrorCode.E_TYPE, "random() requires an integer argument.");
+
+        if (max.Value <= 0)
+            throw MooError(MooErrorCode.E_INVARG, "random() requires a positive integer argument.");
+
+        return new MooValue.Integer(System.Random.Shared.NextInt64(1, max.Value + 1));
+    }
+
     private static long ParseMooObjectString(string value) {
         var text = value.Trim();
 
@@ -1817,6 +1844,17 @@ public sealed class MooEvaluator {
         MooValue.Error => false,
         _ => false
     };
+
+    private bool TryConvertNonDebugError(ScriptResult result, out MooValue errorValue) {
+        if (!_context.Debug
+            && result.ErrorDetail is { Suppressible: true, ErrorCode: { } errorCode }) {
+            errorValue = new MooValue.Error(errorCode);
+            return true;
+        }
+
+        errorValue = MooValue.NothingValue;
+        return false;
+    }
 
     private static string MooToString(MooValue value) => value switch {
         MooValue.Nothing => "",

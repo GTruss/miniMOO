@@ -6,7 +6,7 @@ public sealed class ScriptExecutionMeter {
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
 
     public long MaxTicks { get; init; } = 100_000;
-    public double MaxSeconds { get; init; } = 30.0;
+    public double MaxSeconds { get; init; } = 600.0;
 
     public long UsedTicks { get; private set; }
 

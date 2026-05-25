@@ -23,6 +23,7 @@ public static class WorldIds {
     public static readonly ObjectId CommandUtils = new(56);
     public static readonly ObjectId CodeUtils = new(59);
     public static readonly ObjectId SeqUtils = new(33);
+    public static readonly ObjectId QuotaUtils = new(79);
 
     public static readonly ObjectId MailPlayer = new(40);
     public static readonly ObjectId Wiz = new(57);

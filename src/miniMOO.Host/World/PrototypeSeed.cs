@@ -24,6 +24,7 @@ public static partial class WorldSeeder {
         AddFrandsPlayerClass(repo);
         AddGenericEditor(repo);
         AddVerbEditor(repo);
+        AddQuotaUtils(repo);
     }
 
     private static void AddRoot(InMemoryObjectRepository repo) {
@@ -100,5 +101,9 @@ public static partial class WorldSeeder {
 
     private static void AddVerbEditor(InMemoryObjectRepository repo) {
         AddFileObject(repo, "core", "0049-verb-editor.moo.md");
+    }
+
+    private static void AddQuotaUtils(InMemoryObjectRepository repo) {
+        AddFileObject(repo, "core", "0079-quota-utils.moo.md");
     }
 }

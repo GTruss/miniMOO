@@ -64,6 +64,11 @@ public sealed class EngineScriptWorld : IScriptWorld {
                     .ToList()),
             "aliases" => new MooValue.List(
                 obj.Aliases.Select(a => (MooValue)new MooValue.String(a)).ToList()),
+            "r" => new MooValue.Integer(obj.HasFlag(ObjectFlags.Readable) ? 1 : 0),
+            "w" => new MooValue.Integer(obj.HasFlag(ObjectFlags.Writable) ? 1 : 0),
+            "f" => new MooValue.Integer(obj.HasFlag(ObjectFlags.Fertile) ? 1 : 0),
+            "programmer" => new MooValue.Integer(obj.HasFlag(ObjectFlags.Programmer) ? 1 : 0),
+            "wizard" => new MooValue.Integer(obj.HasFlag(ObjectFlags.Wizard) ? 1 : 0),
             _ => null
         };
 
@@ -126,7 +131,9 @@ public sealed class EngineScriptWorld : IScriptWorld {
         var (mooVerb, definingId) = _resolver.FindVerbWithOwner(searchId, verb);
 
         if (mooVerb is null)
-            return ScriptResult.Failure($"Verb not found: {thisId}:{verb}");
+            return ScriptResult.Failure(new ScriptError(
+                $"Verb not found: {thisId}:{verb}",
+                ErrorCode: MooErrorCode.E_VERBNF));
 
         if (mooVerb.ImplementationKind != VerbImplementationKind.Script)
             return ScriptResult.Failure($"Verb is not script-backed: {thisId}:{verb}");
@@ -136,6 +143,7 @@ public sealed class EngineScriptWorld : IScriptWorld {
             ThisId = thisId,
             CallerId = callerContext.ThisId,
             Verb = verb,
+            Debug = mooVerb.Flags.HasFlag(VerbFlags.Debug),
             ArgStr = string.Concat(args.Select(arg => arg.ToString())),
             Args = args,
             DirectObjectId = callerContext.DirectObjectId,
@@ -151,15 +159,17 @@ public sealed class EngineScriptWorld : IScriptWorld {
         var result = await _scriptRuntime.ExecuteAsync(context, mooVerb.Code);
 
         if (!result.IsSuccess) {
-            var message = result.Error ?? "Script failed.";
-            var frame = $"... (eng) {definingId}:{string.Join("/", mooVerb.Names)} (this == {thisId})";
+            if (!mooVerb.Flags.HasFlag(VerbFlags.Debug)
+                && result.ErrorDetail?.ErrorCode is { } errorCode)
+                return ScriptResult.Success(new MooValue.Error(errorCode));
 
             return result.WithFrame(new ScriptTraceFrame(
                 definingId,
                 thisId,
                 verb,
-           null,
-      $"... (eng) {definingId}:{string.Join("/", mooVerb.Names)} (this == {thisId})"));
+                null,
+                $"... (eng) {definingId}:{string.Join("/", mooVerb.Names)} (this == {thisId})"))
+                .WithSuppressible(false);
         }
         return result;
     }

@@ -1,6 +1,7 @@
 ﻿using miniMOO.Core.Things;
 
 using miniMOO.Core.Language;
+using System.Text;
 
 namespace miniMOO.Engine.Parser;
 
@@ -35,7 +36,9 @@ public sealed class CommandParser {
 
         var verb = words[0];
         var args = words.Skip(1).ToList();
-        var argumentText = string.Join(" ", args);
+        var argumentText = input.Length > verb.Length
+            ? input[verb.Length..].TrimStart()
+            : "";
 
         var prepMatch = FindPreposition(args);
 
@@ -110,8 +113,46 @@ public sealed class CommandParser {
     }
 
     private static List<string> SplitWords(string input) {
-        return input
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToList();
+        var words = new List<string>();
+        var current = new StringBuilder();
+        var inQuote = false;
+        var escaping = false;
+
+        foreach (var ch in input) {
+            if (escaping) {
+                current.Append(ch);
+                escaping = false;
+                continue;
+            }
+
+            if (ch == '\\') {
+                escaping = true;
+                continue;
+            }
+
+            if (ch == '"') {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (char.IsWhiteSpace(ch) && !inQuote) {
+                if (current.Length > 0) {
+                    words.Add(current.ToString());
+                    current.Clear();
+                }
+
+                continue;
+            }
+
+            current.Append(ch);
+        }
+
+        if (escaping)
+            current.Append('\\');
+
+        if (current.Length > 0)
+            words.Add(current.ToString());
+
+        return words;
     }
 }

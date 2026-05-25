@@ -29,10 +29,24 @@ public sealed class MooVerb {
         if (string.Equals(pattern, verb, StringComparison.OrdinalIgnoreCase))
             return true;
 
-        if (!pattern.EndsWith("*", StringComparison.Ordinal))
+        var star = pattern.IndexOf('*');
+
+        if (star < 0)
             return false;
 
-        var prefix = pattern[..^1];
-        return verb.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        var minimumPrefix = pattern[..star];
+
+        if (verb.Length < minimumPrefix.Length)
+            return false;
+
+        if (!verb.StartsWith(minimumPrefix, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (star == pattern.Length - 1)
+            return true;
+
+        var fullName = pattern.Remove(star, 1);
+
+        return fullName.StartsWith(verb, StringComparison.OrdinalIgnoreCase);
     }
 }

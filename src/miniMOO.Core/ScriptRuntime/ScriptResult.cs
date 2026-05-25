@@ -16,7 +16,8 @@ public sealed record ScriptError(
     int? Column = null,
     string? SourceText = null,
     string? SourceLabel = null,
-    IReadOnlyList<ScriptTraceFrame>? Trace = null) {
+    IReadOnlyList<ScriptTraceFrame>? Trace = null,
+    bool Suppressible = true) {
 
     public IReadOnlyList<ScriptTraceFrame> Frames => Trace ?? [];
 
@@ -86,4 +87,12 @@ public sealed record ScriptResult(
                 ErrorDetail = (ErrorDetail ?? new ScriptError("Script failed."))
                     .WithFrame(frame)
             };
-} 
+
+    public ScriptResult WithSuppressible(bool suppressible)
+        => IsSuccess
+            ? this
+            : this with {
+                ErrorDetail = (ErrorDetail ?? new ScriptError("Script failed."))
+                    with { Suppressible = suppressible }
+            };
+}
