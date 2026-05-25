@@ -3,6 +3,7 @@ using miniMOO.Core.Things;
 using miniMOO.Engine.Repositories;
 using miniMOO.Engine.Services;
 using miniMOO.Engine.Verbs;
+using miniMOO.Script.Evaluation;
 
 namespace miniMOO.Engine.Parser;
 
@@ -136,9 +137,16 @@ public sealed class CommandDispatcher {
             World = _scriptWorld
         };
 
-        var result = _scripts.ExecuteAsync(scriptContext, verb.Implementation)
-            .GetAwaiter()
-            .GetResult();
+        ScriptResult result;
+
+        try {
+            result = _scripts.ExecuteAsync(scriptContext, verb.Code)
+                .GetAwaiter()
+                .GetResult();
+        }
+        catch (MooTaskAbortException) {
+            return VerbResult.Success();
+        }
 
         if (result.IsSuccess)
             return VerbResult.Success(result.Value);

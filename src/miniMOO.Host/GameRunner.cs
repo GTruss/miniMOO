@@ -45,6 +45,8 @@ public class GameRunner {
             _dispatcher.Dispatch(playerId, command);
             return Task.CompletedTask;
         });
+        scriptWorld.SetInputReader(_ =>
+            Task.FromResult(_terminal.ReadLine()));
 
         _terminal.WriteLine("Welcome to miniMOO!");
 
@@ -52,7 +54,7 @@ public class GameRunner {
     
         while (true) {
             _terminal.Write("> ");
-            var input = Console.ReadLine();
+            var input = _terminal.ReadLine();
 
             if (string.IsNullOrWhiteSpace(input))
                 continue;

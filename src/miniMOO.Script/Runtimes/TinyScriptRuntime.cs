@@ -54,6 +54,9 @@ public sealed class TinyScriptRuntime : IScriptRuntime {
         catch (MooEvaluationException ex) {
             return ScriptResult.Failure(ex.Message);
         }
+        catch (MooTaskAbortException) {
+            throw;
+        }
         catch (MooScriptException ex) {
             return ScriptResult.Failure(new ScriptError(
                 ex.Message,

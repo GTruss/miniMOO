@@ -44,6 +44,11 @@ public sealed record VerbCallExpressionNode(
     string VerbName,
     IReadOnlyList<ExpressionNode> Arguments) : ExpressionNode;
 
+public sealed record DynamicVerbCallExpressionNode(
+    ExpressionNode Target,
+    ExpressionNode VerbName,
+    IReadOnlyList<ExpressionNode> Arguments) : ExpressionNode;
+
 public sealed record FunctionCallExpressionNode(
     string FunctionName,
     IReadOnlyList<ExpressionNode> Arguments) : ExpressionNode;

@@ -1,6 +1,6 @@
 ---
 created: 2026-05-24T12:40
-updated: 2026-05-24T13:55
+updated: 2026-05-24T15:08
 ---
 # miniMOO File World Data
 
@@ -13,7 +13,22 @@ Object files use the `.moo.md` extension while the format is still settling.
 
 Each file starts with YAML-lite frontmatter for object metadata. Properties use
 ```yaml fenced blocks, and verbs use a ```yaml metadata block followed
-by a ```moo code block.
+by a ```csharp code block. The code is still MOO script; `csharp` is used only
+for friendlier editor highlighting.
+
+The loader validates the basic shape of object files:
+
+- object files must start with frontmatter
+- property metadata uses `name`
+- verb metadata uses `names`
+- a metadata block cannot contain both `name` and `names`
+- verb metadata must be followed by a `csharp` code block
+- orphan `csharp` blocks are rejected
+- unsupported fence languages are rejected
+- object names, property names, and verb names cannot be empty
+- duplicate properties on one object are rejected
+- duplicate names inside one verb definition are rejected
+- duplicate object ids are rejected when loading a directory
 
 Example:
 

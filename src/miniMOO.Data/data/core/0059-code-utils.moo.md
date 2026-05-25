@@ -8,7 +8,7 @@ flags:
   - readable
 aliases: []
 created: 2026-05-24T15:10
-updated: 2026-05-24T15:10
+updated: 2026-05-24T19:49
 ---
 
 # $code_utils
@@ -17,6 +17,12 @@ updated: 2026-05-24T15:10
 name: prepositions
 type: list
 value: ["with/using", "at/to", "in front of", "in/inside/into", "on top of/on/onto/upon", "out of/from inside/from", over, through, "under/underneath/beneath", behind, beside, "for/about", is, as, "off/off of"]
+```
+
+```yaml
+name: error_names
+type: list
+value: ["E_NONE", "E_TYPE", "E_DIV", "E_PERM", "E_PROPNF", "E_VERBNF", "E_VARNF", "E_INVIND", "E_RECMOVE", "E_MAXREC", "E_RANGE", "E_ARGS", "E_NACC", "E_INVARG", "E_QUOTA", "E_FLOAT"]
 ```
 
 ```yaml
@@ -57,6 +63,29 @@ flags: [readable, executable]
 ```csharp
 return toliteral(@args);
 return this.error_names[toint(args[1]) + 1];
+```
+
+## Verb: toerr
+
+```yaml
+names: [toerr]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+if (typeof(s = args[1]) != STR)
+  n = toint(s) + 1;
+  if (n > length(this.error_list))
+    return 1;
+  endif
+elseif (!(n = s in this.error_names || "E_" + s in this.error_names))
+  return 1;
+endif
+return this.error_list[n];
 ```
 
 ## Verb: toobj
@@ -103,6 +132,40 @@ if (colon = index(s, ":"))
 else
   return 0;
 endif
+```
+
+## Verb: parse_propref
+
+```yaml
+names: [parse_propref]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+s = args[1];
+if (dot = index(s, "."))
+  object = s[1..dot - 1];
+  prop = s[dot + 1..$];
+  if (object == "" || prop == "")
+    return 0;
+  elseif (object[1] == "$")
+    object = `#0.(object[2..$]) ! ANY';
+    if (typeof(object) != OBJ)
+      return 0;
+    endif
+    object = tostr(object);
+  endif
+elseif (index(s, "$") == 1)
+  object = "#0";
+  prop = s[2..$];
+else
+  return 0;
+endif
+return {object, prop};
 ```
 
 ## Verb: get_prep

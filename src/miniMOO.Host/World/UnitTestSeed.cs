@@ -1,3 +1,4 @@
+using miniMOO.Core.Things;
 using miniMOO.Engine.Repositories;
 
 namespace miniMOO.Host.World;
@@ -8,6 +9,11 @@ public static partial class WorldSeeder {
         if (wiz is null)
             return;
 
+        wiz.Properties["_test_clear_property"] = new MooProperty {
+            Name = "_test_clear_property",
+            OwnerId = ObjectId.System,
+            Value = MooValue.ClearValue
+        };
 
         wiz.Verbs.Add(ScriptVerb(["@parsefail1"], """
             player:tell("before parse failure");
@@ -24,6 +30,10 @@ public static partial class WorldSeeder {
         wiz.Verbs.Add(ScriptVerb(["_test_destructure"], """
             {a, b} = args;
             return (a == "left" && b == "right");
+        """));
+
+        wiz.Verbs.Add(ScriptVerb(["_test_dynamic_verb_target"], """
+            return tostr("dynamic:", args[1]);
         """));
 
         wiz.Verbs.Add(ScriptVerb(["@test-builtins"], """
@@ -93,6 +103,22 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: empty string slice");
+              failed = failed + 1;
+            endif
+
+            if ("player"[8..6] == "")
+              player:tell("PASS: past-end empty string slice");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: past-end empty string slice");
+              failed = failed + 1;
+            endif
+
+            if (length({"a", "b", "c"}[5..3]) == 0)
+              player:tell("PASS: past-end empty list slice");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: past-end empty list slice");
               failed = failed + 1;
             endif
 
@@ -473,6 +499,16 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            dynamic_verb = "_test_dynamic_verb_target";
+            result = this:(dynamic_verb)("call");
+            if (result == "dynamic:call")
+              player:tell("PASS: dynamic verb call");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: dynamic verb call");
+              failed = failed + 1;
+            endif
+
             {required, ?optional = "fallback"} = {"actual"};
             if (required == "actual" && optional == "fallback")
               player:tell("PASS: optional destructuring default");
@@ -630,6 +666,32 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: properties()");
+              failed = failed + 1;
+            endif
+
+            pinfo = property_info($root, "description");
+            if (length(pinfo) == 2 && pinfo[1] == #0 && index(pinfo[2], "r"))
+              player:tell("PASS: property_info() found");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: property_info() found");
+              failed = failed + 1;
+            endif
+
+            caught = `property_info($root, "definitely_not_a_property") ! E_PROPNF => "caught"';
+            if (caught == "caught")
+              player:tell("PASS: property_info() not found");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: property_info() not found");
+              failed = failed + 1;
+            endif
+
+            if (is_clear_property($wiz, "_test_clear_property") && !is_clear_property($root, "description"))
+              player:tell("PASS: is_clear_property()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: is_clear_property()");
               failed = failed + 1;
             endif
 
@@ -884,7 +946,7 @@ public static partial class WorldSeeder {
             test_obj = create($thing);
             set_name(test_obj, "test object");
             add_alias(test_obj, "test-alias");
-            add_verb(test_obj, "ping", "return \"pong\";");
+            ping_index = add_verb(test_obj, "ping", "return \"pong\";");
 
             if (test_obj.name == "test object")
               player:tell("PASS: set_name()");
@@ -902,11 +964,42 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            if (test_obj:ping() == "pong")
+            if (ping_index == length(verbs(test_obj)) && test_obj:ping() == "pong")
               player:tell("PASS: add_verb()");
               passed = passed + 1;
             else
               player:tell("FAIL: add_verb()");
+              failed = failed + 1;
+            endif
+
+            add_property(test_obj, "added_prop", "added value", {player, "rw"});
+            pinfo = property_info(test_obj, "added_prop");
+            if (test_obj.added_prop == "added value" && pinfo[1] == player && pinfo[2] == "rw")
+              player:tell("PASS: add_property()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: add_property()");
+              failed = failed + 1;
+            endif
+
+            lambda_index = add_verb(test_obj, {player, "rx", "lambda_ping lp"}, {"none", "none", "none"});
+            set_verb_code(test_obj, "lambda_ping", {"return \"lambda pong\";"});
+            vinfo = verb_info(test_obj, "lambda_ping");
+            vargs = verb_args(test_obj, "lambda_ping");
+            if (lambda_index == length(verbs(test_obj)) && test_obj:lp() == "lambda pong" && vinfo[1] == player && vinfo[2] == "rx" && vinfo[3] == "lambda_ping lp" && vargs == {"none", "none", "none"})
+              player:tell("PASS: add_verb() Lambda form");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: add_verb() Lambda form");
+              failed = failed + 1;
+            endif
+
+            set_verb_code(test_obj, "ping", {"return \"changed\";"});
+            if (test_obj:ping() == "changed" && verb_code(test_obj, "ping")[1] == "return \"changed\";")
+              player:tell("PASS: set_verb_code()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: set_verb_code()");
               failed = failed + 1;
             endif
 

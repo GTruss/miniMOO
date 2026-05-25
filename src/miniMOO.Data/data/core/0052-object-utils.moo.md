@@ -8,7 +8,7 @@ flags:
   - readable
 aliases: []
 created: 2026-05-24T15:10
-updated: 2026-05-24T15:10
+updated: 2026-05-24T16:08
 ---
 
 # $object_utils
@@ -33,6 +33,28 @@ while (valid(object))
   object = parent(object);
 endwhile
 return 0;
+```
+
+## Verb: accessible_verbs
+
+```yaml
+names: [accessible_verbs]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+thing = args[1];
+verbs = {};
+i = 1;
+while ((info = `verb_info(thing, i) ! ANY') != E_VERBNF)
+  verbs = {@verbs, info ? info[3] | E_PERM};
+  i = i + 1;
+endwhile
+return verbs;
 ```
 
 ## Verb: ancestors

@@ -14,6 +14,7 @@ public sealed class FileWorldLoader {
             world.Objects.Add(LoadObject(file));
         }
 
+        ValidateWorld(world);
         return world;
     }
 
@@ -21,6 +22,15 @@ public sealed class FileWorldLoader {
         try {
             var text = File.ReadAllText(path).Replace("\r\n", "\n").Replace('\r', '\n');
             return ParseObject(text, path);
+        }
+        catch (FileWorldLoadException) {
+            throw;
+        }
+        catch (FormatException ex) {
+            throw new FileWorldLoadException($"Could not parse object definition: {path}: {ex.Message}", ex);
+        }
+        catch (OverflowException ex) {
+            throw new FileWorldLoadException($"Could not parse object definition: {path}: {ex.Message}", ex);
         }
         catch (IOException ex) {
             throw new FileWorldLoadException($"Could not read object definition: {path}", ex);
@@ -40,6 +50,9 @@ public sealed class FileWorldLoader {
 
             if (fence.Language == "yaml") {
                 var metadata = YamlLite.Parse(fence.Content);
+                if (metadata.Has("name") && metadata.Has("names"))
+                    throw new FileWorldLoadException($"{path}: YAML block cannot be both a property and a verb.");
+
                 if (!metadata.Has("names")) {
                     properties.Add(ParseProperty(metadata, path));
                     i = fence.EndLine;
@@ -57,9 +70,15 @@ public sealed class FileWorldLoader {
                 verbs.Add(ParseVerb(metadata, codeFence.Content, path));
                 i = codeFence.EndLine;
             }
+            else if (fence.Language == "csharp") {
+                throw new FileWorldLoadException($"{path}: orphan ```csharp code block. Verb code must follow a ```yaml metadata block with 'names'.");
+            }
+            else if (fence.Language.Length > 0) {
+                throw new FileWorldLoadException($"{path}: unsupported markdown fence language '{fence.Language}'. Use ```yaml for metadata and ```csharp for verb code.");
+            }
         }
 
-        return new FileObjectDefinition {
+        var definition = new FileObjectDefinition {
             Id = ParseObjectId(frontmatter.RequiredString("id", path), path, "id"),
             ParentId = ParseOptionalObjectId(frontmatter.OptionalString("parent"), path, "parent"),
             LocationId = ParseOptionalObjectId(frontmatter.OptionalString("location"), path, "location"),
@@ -70,10 +89,16 @@ public sealed class FileWorldLoader {
             Properties = properties,
             Verbs = verbs
         };
+
+        ValidateObject(definition, path);
+        return definition;
     }
 
     private static FilePropertyDefinition ParseProperty(YamlLite block, string path) {
         var name = block.RequiredString("name", path);
+        if (string.IsNullOrWhiteSpace(name))
+            throw new FileWorldLoadException($"{path}: property name cannot be empty.");
+
         var type = block.OptionalString("type") ?? "string";
         var rawValue = block.OptionalRaw("value");
 
@@ -90,6 +115,8 @@ public sealed class FileWorldLoader {
 
     private static FileVerbDefinition ParseVerb(YamlLite block, string code, string path) {
         var names = block.RequiredArray("names", path);
+        if (names.Any(string.IsNullOrWhiteSpace))
+            throw new FileWorldLoadException($"{path}: verb names cannot be empty.");
 
         return new FileVerbDefinition {
             Names = names,
@@ -142,33 +169,42 @@ public sealed class FileWorldLoader {
         throw new FileWorldLoadException($"Unclosed markdown fence starting at line {startLine + 1}.");
     }
 
-    private static FileMooValueDefinition ParseMooValue(string type, string? rawValue)
-        => type.ToLowerInvariant() switch {
-            "nothing" => new FileMooValueDefinition { Type = "nothing" },
-            "integer" or "int" => new FileMooValueDefinition {
-                Type = "integer",
-                Value = long.Parse(rawValue ?? "0")
-            },
-            "float" => new FileMooValueDefinition {
-                Type = "float",
-                Value = double.Parse(rawValue ?? "0")
-            },
-            "string" or "str" => new FileMooValueDefinition {
-                Type = "string",
-                Value = YamlLite.Unquote(rawValue ?? "")
-            },
-            "object" or "obj" => new FileMooValueDefinition {
-                Type = "object",
-                Value = YamlLite.Unquote(rawValue ?? "#-1")
-            },
-            "list" => new FileMooValueDefinition {
-                Type = "list",
-                Value = YamlLite.ParseArray(rawValue ?? "[]")
-                    .Select(InferScalarValue)
-                    .ToList()
-            },
-            _ => throw new FileWorldLoadException($"Unsupported MOO value type: {type}")
-        };
+    private static FileMooValueDefinition ParseMooValue(string type, string? rawValue) {
+        try {
+            return type.ToLowerInvariant() switch {
+                "nothing" => new FileMooValueDefinition { Type = "nothing" },
+                "integer" or "int" => new FileMooValueDefinition {
+                    Type = "integer",
+                    Value = long.Parse(rawValue ?? "0")
+                },
+                "float" => new FileMooValueDefinition {
+                    Type = "float",
+                    Value = double.Parse(rawValue ?? "0")
+                },
+                "string" or "str" => new FileMooValueDefinition {
+                    Type = "string",
+                    Value = YamlLite.Unquote(rawValue ?? "")
+                },
+                "object" or "obj" => new FileMooValueDefinition {
+                    Type = "object",
+                    Value = YamlLite.Unquote(rawValue ?? "#-1")
+                },
+                "list" => new FileMooValueDefinition {
+                    Type = "list",
+                    Value = YamlLite.ParseArray(rawValue ?? "[]")
+                        .Select(InferScalarValue)
+                        .ToList()
+                },
+                _ => throw new FileWorldLoadException($"Unsupported MOO value type: {type}")
+            };
+        }
+        catch (FormatException ex) {
+            throw new FileWorldLoadException($"Invalid {type} value: {rawValue}", ex);
+        }
+        catch (OverflowException ex) {
+            throw new FileWorldLoadException($"Invalid {type} value: {rawValue}", ex);
+        }
+    }
 
     private static FileMooValueDefinition InferScalarValue(string value) {
         if (value.StartsWith('#') && int.TryParse(value[1..], out _))
@@ -231,6 +267,33 @@ public sealed class FileWorldLoader {
 
     private static string TrimOneTrailingNewline(string value)
         => value.EndsWith('\n') ? value[..^1] : value;
+
+    private static void ValidateWorld(FileWorldDefinition world) {
+        var ids = new Dictionary<ObjectId, string>();
+        foreach (var obj in world.Objects) {
+            if (!ids.TryAdd(obj.Id, obj.Name))
+                throw new FileWorldLoadException($"Duplicate object id {obj.Id} used by '{ids[obj.Id]}' and '{obj.Name}'.");
+        }
+    }
+
+    private static void ValidateObject(FileObjectDefinition definition, string path) {
+        if (string.IsNullOrWhiteSpace(definition.Name))
+            throw new FileWorldLoadException($"{path}: object name cannot be empty.");
+
+        var propertyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in definition.Properties) {
+            if (!propertyNames.Add(property.Name))
+                throw new FileWorldLoadException($"{path}: duplicate property '{property.Name}'.");
+        }
+
+        foreach (var verb in definition.Verbs) {
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var name in verb.Names) {
+                if (!names.Add(name))
+                    throw new FileWorldLoadException($"{path}: duplicate verb name '{name}' in one verb definition.");
+            }
+        }
+    }
 
     private readonly record struct MarkdownFence(string Language, string Content, int EndLine);
 }

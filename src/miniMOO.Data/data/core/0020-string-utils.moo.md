@@ -8,7 +8,7 @@ flags:
   - readable
 aliases: []
 created: 2026-05-24T15:10
-updated: 2026-05-24T15:10
+updated: 2026-05-24T19:44
 ---
 
 # $string_utils
@@ -25,25 +25,20 @@ flags: [readable, executable]
 ```
 
 ```csharp
-str = args[1];
-sep = args[2];
-result = {};
-done = 0;
-while (!done)
-  i = index(str, sep);
-  if (i == 0)
-    if (length(str) > 0)
-      result = listappend(result, str);
-    endif
-    done = 1;
-  else
-    if (i > 1)
-      result = listappend(result, substr(str, 1, i - 1));
-    endif
-    str = substr(str, i + length(sep));
+"$string_utils:explode(subject [, break])";
+"Return a list of those substrings of subject separated by runs of break[1].";
+"break defaults to space.";
+{subject, ?breakit = {" "}} = args;
+breakit = breakit[1];
+subject = subject + breakit;
+parts = {};
+while (subject)
+  if ((i = index(subject, breakit)) > 1)
+    parts = {@parts, subject[1..i - 1]};
   endif
+  subject = subject[i + 1..$];
 endwhile
-return result;
+return parts;
 ```
 
 ## Verb: english_list
@@ -193,6 +188,100 @@ else
 endif
 ```
 
+## Verb: centre
+
+```yaml
+names: ["centre", "center"]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+{text, len, ?lfill = " ", ?rfill = lfill} = args;
+out = tostr(text);
+abslen = abs(len);
+if (length(out) < abslen)
+  return this:space((abslen - length(out)) / 2, lfill) + out + this:space((abslen - length(out) + 1) / -2, rfill);
+else
+  return len > 0 ? out | out[1..abslen];
+endif
+```
+
+## Verb: right
+
+```yaml
+names: [right]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+{text, len, ?fill = " "} = args;
+abslen = abs(len);
+out = tostr(text);
+if ((lenout = length(out)) < abslen)
+  return this:space(abslen - lenout, fill) + out;
+else
+  return len > 0 ? out | out[$ - abslen + 1..$];
+endif
+```
+
+## Verb: trim
+
+```yaml
+names: [trim]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+{string, ?space = " "} = args;
+m = match(string, tostr("[^", space, "]%(.*[^", space, "]%)?%|$"));
+return string[m[1]..m[2]];
+```
+
+## Verb: triml
+
+```yaml
+names: [triml]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+{string, ?what = " "} = args;
+m = match(string, tostr("[^", what, "]%|$"));
+return string[m[1]..$];
+ ```
+
+## Verb: trimr
+
+```yaml
+names: [trimr]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+{string, ?what = " "} = args;
+return string[1..rmatch(string, tostr("[^", what, "]%|^"))[2]];
+ ```
+
 ## Verb: space
 
 ```yaml
@@ -278,6 +367,152 @@ else
 endif
 ```
 
+## Verb: to_value
+
+```yaml
+names: [to_value]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+result = this:_tolist(string = args[1] + "}");
+if (result[1] && result[1] != $string_utils:space(result[1]))
+  return {0, tostr("after char ", length(string) - result[1], ":  ", result[2])};
+elseif (typeof(result[1]) == INT)
+  return {0, "missing } or \""};
+elseif (length(result[2]) > 1)
+  return {0, "comma unexpected."};
+elseif (result[2])
+  return {1, result[2][1]};
+else
+  return {0, "missing expression"};
+endif
+```
+
+## Verb: _tolist
+
+```yaml
+names: [_tolist]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+rest = this:triml(args[1]);
+vlist = {};
+if (!rest)
+  return {0, {}};
+elseif (rest[1] == "}")
+  return {rest[2..$], {}};
+endif
+while (1)
+  rlen = length(rest);
+  if (w = index("{\"", rest[1]))
+    result = this:({"_tolist", "_unquote"}[w])(rest[2..rlen]);
+    if (typeof(result[1]) == INT)
+      return result;
+    endif
+    vlist = {@vlist, result[2]};
+    rest = result[1];
+  else
+    thing = rest[1..tlen = min(index(rest + ",", ","), index(rest + "}", "}")) - 1];
+    if (typeof(s = this:_toscalar(thing)) == STR)
+      return {rlen, s};
+    endif
+    vlist = {@vlist, s};
+    rest = rest[tlen + 1..rlen];
+  endif
+  if (!rest)
+    return {0, vlist};
+  elseif (rest[1] == "}")
+    return {rest[2..$], vlist};
+  elseif (rest[1] == ",")
+    rest = this:triml(rest[2..$]);
+  else
+    return {length(rest), ", or } expected"};
+  endif
+endwhile
+```
+
+## Verb: _toscalar
+
+```yaml
+names: [_toscalar]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+thing = args[1];
+if (!thing)
+  return "missing value";
+elseif (match(thing, "^#?[-+]?[0-9]+ *$"))
+  return thing[1] == "#" ? toobj(thing) | toint(thing);
+elseif (match(thing, "^[-+]?%([0-9]+%.[0-9]*%|[0-9]*%.[0-9]+%)%(e[-+]?[0-9]+%)? *$"))
+  "matches 2. .2 3.2 3.2e3 .2e-3 3.e3";
+  return `tofloat(thing) ! E_INVARG => tostr("Bad floating point value: ", thing)';
+elseif (match(thing, "^[-+]?[0-9]+e[-+]?[0-9]+ *$"))
+  "matches 345e4. No decimal, but has an e so still a float";
+  return `tofloat(thing) ! E_INVARG => tostr("Bad floating point value: ", thing)';
+elseif (thing[1] == "E")
+  return (e = $code_utils:toerr(thing)) ? tostr("unknown error code `", thing, "'") | e;
+elseif (thing[1] == "#")
+  return tostr("bogus objectid `", thing, "'");
+else
+  return tostr("`", thing[1], "' unexpected");
+endif
+```
+
+## Verb: word_start
+
+```yaml
+names: [word_start]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+rest = args[1];
+wstart = match(rest, "[^ ]%|$")[1];
+wbefore = wstart - 1;
+rest[1..wbefore] = "";
+if (!rest)
+  return {};
+endif
+quote = 0;
+wslist = {};
+pattern = " +%|\\.?%|\"";
+while (m = match(rest, pattern))
+  "... find the next occurence of a special character, either";
+  "... a block of spaces, a quote or a backslash escape sequence...";
+  char = rest[m[1]];
+  if (char == " ")
+    wslist = {@wslist, {wstart, wbefore + m[1] - 1}};
+    wstart = wbefore + m[2] + 1;
+  elseif (char == "\"")
+    "... beginning or end of quoted string...";
+    "... within a quoted string spaces aren't special...";
+    pattern = (quote = !quote) ? "\\.?%|\"" | " +%|\\.?%|\"";
+  endif
+  rest[1..m[2]] = "";
+  wbefore = wbefore + m[2];
+endwhile
+return rest || char != " " ? {@wslist, {wstart, wbefore + length(rest)}} | wslist;
+```
+
 ## Verb: char_list
 
 ```yaml
@@ -318,6 +553,39 @@ if (string && (i = index("abcdefghijklmnopqrstuvwxyz", string[1], 1)))
   string[1] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[i];
 endif
 return string;
+```
+
+## Verb: print
+
+```yaml
+names: [print]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+return toliteral(args[1]);
+value = args[1];
+if (typeof(value) == LIST)
+  if (value)
+    result = "{" + this:print(value[1]);
+    for val in (listdelete(value, 1))
+      result = tostr(result, ", ", this:print(val));
+    endfor
+    return result + "}";
+  else
+    return "{}";
+  endif
+elseif (typeof(value) == STR)
+  return tostr("\"", strsub(strsub(value, "\\", "\\\\"), "\"", "\\\""), "\"");
+elseif (typeof(value) == ERR)
+  return $code_utils:error_name(value);
+else
+  return tostr(value);
+endif
 ```
 
 ## Verb: name_and_number
@@ -499,5 +767,100 @@ elseif (string[1] == "$")
   endif
 else
   return $failed_match;
+endif
+```
+
+## Verb: abbreviated_value
+
+```yaml
+names: [abbreviated_value]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+{value, ?max_reslen = $maxint, ?max_lstlev = $maxint, ?max_lstlen = $maxint, ?max_strlen = $maxint, ?max_toklen = $maxint} = args;
+return this:_abbreviated_value(value, max_reslen, max_lstlev, max_lstlen, max_strlen, max_toklen);
+```
+## Verb: _abbreviated_value
+
+```yaml
+names: [_abbreviated_value]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+{value, max_reslen, max_lstlev, max_lstlen, max_strlen, max_toklen} = args;
+if ((type = typeof(value)) == LIST)
+  if (!value)
+    return "{}";
+  elseif (max_lstlev == 0)
+    return "{...}";
+  else
+    n = length(value);
+    result = "{";
+    r = max_reslen - 2;
+    i = 1;
+    eltstr = "";
+    while (i <= n && i <= max_lstlen && r > (x = i == 1 ? 0 | 2))
+      eltlen = length(eltstr = this:(verb)(value[i], r, max_lstlev - 1, max_lstlen, max_strlen, max_toklen));
+      lastpos = 1;
+      if (r >= eltlen + x)
+        comma = i == 1 ? "" | ", ";
+        result = tostr(result, comma);
+        if (r > 4)
+          lastpos = length(result);
+        endif
+        result = tostr(result, eltstr);
+        r = r - eltlen - x;
+      elseif (i == 1)
+        return "{...}";
+      elseif (r > 4)
+        return tostr(result, ", ...}");
+      else
+        return tostr(result[1..lastpos], "...}");
+      endif
+      i = i + 1;
+    endwhile
+    if (i <= n)
+      if (i == 1)
+        return "{...}";
+      elseif (r > 4)
+        return tostr(result, ", ...}");
+      else
+        return tostr(result[1..lastpos], "...}");
+      endif
+    else
+      return tostr(result, "}");
+    endif
+  endif
+elseif (type == STR)
+  result = "\"";
+  while ((q = index(value, "\"")) ? q = min(q, index(value, "\\")) | (q = index(value, "\\")))
+    result = result + value[1..q - 1] + "\\" + value[q];
+    value = value[q + 1..$];
+  endwhile
+  result = result + value;
+  if (length(result) + 1 > (z = max(min(max_reslen, max(max_strlen, max_strlen + 2)), 6)))
+    z = z - 5;
+    k = 0;
+    while (k < z && result[z - k] == "\\")
+      k = k + 1;
+    endwhile
+    return tostr(result[1..z - k % 2], "\"+...");
+  else
+    return tostr(result, "\"");
+  endif
+else
+  v = type == ERR ? $code_utils:error_name(value) | tostr(value);
+  len = max(4, min(max_reslen, max_toklen));
+  return length(v) > len ? v[1..len - 3] + "..." | v;
 endif
 ```

@@ -438,6 +438,16 @@ public sealed class MooParser {
             }
 
             if (Match(TokenKind.Colon)) {
+                if (Match(TokenKind.LeftParen)) {
+                    var verbExpr = ParseExpression();
+                    Consume(TokenKind.RightParen, "Expected ')' after dynamic verb name.");
+                    Consume(TokenKind.LeftParen, "Expected '(' after dynamic verb name.");
+                    var dynamicArgs = ParseArguments();
+                    Consume(TokenKind.RightParen, "Expected ')' after verb arguments.");
+                    expression = new DynamicVerbCallExpressionNode(expression, verbExpr, dynamicArgs);
+                    continue;
+                }
+
                 var verbName = ParseVerbCallName();
                 Consume(TokenKind.LeftParen, "Expected '(' after verb name.");
                 var args = ParseArguments();

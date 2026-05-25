@@ -6,8 +6,10 @@ namespace miniMOO.Host.World;
 public static partial class WorldSeeder {
     private static void AddSystemObject(InMemoryObjectRepository repo) {
         var sysObj = Obj(ObjectId.System, ObjectId.System, null, null, "The System Object");
+        Prop(sysObj, "maxint", new MooValue.Integer(long.MaxValue));
 
         Prop(sysObj, "root", new MooValue.Object(WorldIds.Root));
+        Prop(sysObj, "root_class", new MooValue.Object(WorldIds.Root));
         Prop(sysObj, "room", new MooValue.Object(WorldIds.Room));
         Prop(sysObj, "builder", new MooValue.Object(WorldIds.Builder));
         Prop(sysObj, "thing", new MooValue.Object(WorldIds.Thing));
@@ -26,8 +28,10 @@ public static partial class WorldSeeder {
         Prop(sysObj, "list_utils",   new MooValue.Object(WorldIds.ListUtils));
         Prop(sysObj, "seq_utils",   new MooValue.Object(WorldIds.SeqUtils));
         Prop(sysObj, "code_utils",   new MooValue.Object(WorldIds.CodeUtils));
+        Prop(sysObj, "display_options",   new MooValue.Object(WorldIds.DisplayOptions));
         Prop(sysObj, "build_options",   new MooValue.Object(WorldIds.BuilderOptions));
         Prop(sysObj, "prog_options",   new MooValue.Object(WorldIds.ProgrammerOptions));
+        Prop(sysObj, "verb_editor",   new MooValue.Object(WorldIds.VerbEditor));
         Prop(sysObj, "nothing", new MooValue.Object(new ObjectId(-1)));
         Prop(sysObj, "failed_match", new MooValue.Object(new ObjectId(-2)));
         Prop(sysObj, "ambiguous_match", new MooValue.Object(new ObjectId(-3)));

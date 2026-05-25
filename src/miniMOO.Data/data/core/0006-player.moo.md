@@ -9,7 +9,7 @@ flags:
   - fertile
 aliases: []
 created: 2026-05-24T14:35
-updated: 2026-05-24T14:35
+updated: 2026-05-24T16:36
 ---
 
 # $player
@@ -38,6 +38,12 @@ value: 0
 name: linelen
 type: integer
 value: -79
+```
+
+```yaml
+name: display_options
+type: list
+value: []
 ```
 
 ## Verb: titlec
@@ -179,6 +185,21 @@ flags: [readable, executable]
 return abs(this.linelen);
 ```
 
+## Verb: display_option
+
+```yaml
+names: [display_option]
+dobj: this
+prep: none
+iobj: this
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+return $display_options:get(this.display_options, args[1]);
+```
+
 ## Verb: tell_contents
 
 ```yaml
@@ -298,4 +319,105 @@ if (c = player:contents())
 else
   player:tell("You are empty-handed.");
 endif
+```
+
+## Verb: @examine
+
+```yaml
+names: ["@examine", "@exam"]
+dobj: any
+prep: none
+iobj: none
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+if (dobjstr == "")
+  player:notify(tostr("Usage:  ", verb, " <object>"));
+  return;
+endif
+what = $string_utils:match_object(dobjstr, player.location);
+if ($command_utils:object_match_failed(what, dobjstr))
+  return;
+endif
+player:notify(tostr(what.name, " (", what, ") is owned by ", valid(what.owner) ? what.owner.name | "a recycled player", " (", what.owner, ")."));
+player:notify(tostr("Aliases:  ", $string_utils:english_list(what.aliases)));
+desc = what:description();
+if (desc)
+  player:notify_lines(desc);
+else
+  player:notify("(No description set.)");
+endif
+contents = what.contents;
+if (contents)
+  player:notify("Contents:");
+  for item in (contents)
+    player:notify(tostr("  ", item.name, " (", item, ")"));
+  endfor
+endif
+"Use dobjstr, not shortest alias.";
+name = dobjstr;
+"name = what.name;";
+"if (typeof(what.aliases) == LIST && what.aliases != {})";
+"for alias in (what.aliases)";
+"if (length(alias) <= length(name))";
+"name = alias;";
+"endif";
+"endfor";
+"endif";
+vrbs = {};
+commands_ok = what in {player, player.location};
+dull_classes = {$root_class, $room, $player, $prog};
+what = what;
+printed_working_msg = 0;
+while (what != $nothing)
+  if (!(what in dull_classes))
+    for i in [1..length(verbs(what))]
+      info = verb_info(what, i);
+      syntax = verb_args(what, i);
+      if (index(info[2], "r") && (syntax[2..3] != {"none", "this"} && (commands_ok || "this" in syntax)) && verb_code(what, i))
+        {dobj, prep, iobj} = syntax;
+        if (syntax == {"any", "any", "any"})
+          prep = "none";
+        endif
+        if (prep != "none")
+          for x in ($string_utils:explode(prep, "/"))
+            if (length(x) <= length(prep))
+              prep = x;
+            endif
+          endfor
+        endif
+        "This is the correct way to handle verbs ending in *";
+        vname = info[3];
+        while (j = index(vname, "* "))
+          vname = tostr(vname[1..j - 1], "<anything>", vname[j + 1..$]);
+        endwhile
+        if (vname[$] == "*")
+          vname = vname[1..$ - 1] + "<anything>";
+        endif
+        vname = strsub(vname, " ", "/");
+        rest = "";
+        if (prep != "none")
+          rest = " " + (prep == "any" ? "<anything>" | prep);
+          if (iobj != "none")
+            rest = tostr(rest, " ", iobj == "this" ? name | "<anything>");
+          endif
+        endif
+        if (dobj != "none")
+          rest = tostr(" ", dobj == "this" ? name | "<anything>", rest);
+        endif
+        vrbs = setadd(vrbs, "  " + vname + rest);
+      endif
+    endfor
+  endif
+  what = parent(what);
+endwhile
+if (vrbs)
+   player:notify("Obvious Verbs:");
+   player:notify_lines(vrbs);
+   printed_working_msg && player:notify("(End of list.)");
+ elseif (printed_working_msg)
+   player:notify("No obvious verbs found.");
+ endif
 ```

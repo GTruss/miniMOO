@@ -16,10 +16,13 @@ public static partial class WorldSeeder {
         AddProgrammer(repo);
         AddWizardPrototype(repo);
         AddGenericOptionsPrototype(repo);
+        AddDisplayOptionsPrototype(repo);
         AddBuildOptionsPrototype(repo);
         AddProgrammerOptionsPrototype(repo);
         AddMailPlayer(repo);
         AddFrandsPlayerClass(repo);
+        AddGenericEditor(repo);
+        AddVerbEditor(repo);
     }
 
     private static void AddRoot(InMemoryObjectRepository repo) {
@@ -74,13 +77,23 @@ public static partial class WorldSeeder {
         AddFileObject(repo, "core", "0076-prog-options.moo.md");
     }
 
+    private static void AddDisplayOptionsPrototype(InMemoryObjectRepository repo) {
+        AddFileObject(repo, "core", "0067-display-options.moo.md");
+    }
+
     private static void AddMailPlayer(InMemoryObjectRepository repo) {
-        var genMailPlayer = Obj(WorldIds.MailPlayer, ObjectId.System, WorldIds.Player, null, "generic mail player");
-        genMailPlayer.Flags = ObjectFlags.Readable | ObjectFlags.Fertile;
-        repo.Add(genMailPlayer);
+        AddFileObject(repo, "core", "0040-mail-player.moo.md");
     }
 
     private static void AddFrandsPlayerClass(InMemoryObjectRepository repo) {
         AddFileObject(repo, "core", "0088-frands-player-class.moo.md");
+    }
+
+    private static void AddGenericEditor(InMemoryObjectRepository repo) {
+        AddFileObject(repo, "core", "0050-generic-editor.moo.md");
+    }
+
+    private static void AddVerbEditor(InMemoryObjectRepository repo) {
+        AddFileObject(repo, "core", "0049-verb-editor.moo.md");
     }
 }

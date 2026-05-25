@@ -17,8 +17,6 @@ public sealed class MooVerb {
     
     public VerbImplementationKind ImplementationKind { get; set; }
 
-    public string Implementation { get; set; } = "";
-
     public string Code { get; set; } = "";
 
     public bool HasFlag(VerbFlags flag)

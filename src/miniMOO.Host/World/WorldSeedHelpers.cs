@@ -42,7 +42,7 @@ public static partial class WorldSeeder {
             Preposition = prep,
             IndirectObject = iobj,
             ImplementationKind = VerbImplementationKind.Script,
-            Implementation = code
+            Code = code
         };
 
         foreach (var name in names)
@@ -64,7 +64,7 @@ public static partial class WorldSeeder {
             Preposition = prep,
             IndirectObject = iobj,
             ImplementationKind = VerbImplementationKind.Builtin,
-            Implementation = implementation
+            Code = implementation
         };
 
         foreach (var name in names)

@@ -13,6 +13,7 @@ public sealed class EngineScriptWorld : IScriptWorld {
     private readonly OutputService _output;
     private readonly IScriptRuntime _scriptRuntime;
     private Func<ObjectId, string, Task>? _evalCommand;
+    private Func<ObjectId, Task<string?>>? _readInput;
 
     public EngineScriptWorld(IObjectRepository objects, IObjectResolver resolver, OutputService output,
                              IScriptRuntime scriptRuntime) {
@@ -25,6 +26,9 @@ public sealed class EngineScriptWorld : IScriptWorld {
 
     public void SetCommandEvaluator(Func<ObjectId, string, Task> evalCommand)
         => _evalCommand = evalCommand;
+
+    public void SetInputReader(Func<ObjectId, Task<string?>> readInput)
+        => _readInput = readInput;
 
     public MooObject? Get(ObjectId id)
         => _objects.Get(id);
@@ -70,6 +74,18 @@ public sealed class EngineScriptWorld : IScriptWorld {
         return Task.CompletedTask;
     }
 
+    public async Task<MooValue> ReadInputAsync(ObjectId playerId) {
+        if (_readInput is null)
+            throw new MooScriptException(MooErrorCode.E_INVARG, "read() is not available.");
+
+        var line = await _readInput(playerId);
+
+        if (line is null)
+            throw new MooScriptException(MooErrorCode.E_INVARG, "No input available.");
+
+        return new MooValue.String(line);
+    }
+
     public Task EvalCommandAsync(ObjectId playerId, string command) {
         if (_evalCommand is null)
             throw new MooScriptException(MooErrorCode.E_INVARG, "eval_command() is not available.");
@@ -104,7 +120,7 @@ public sealed class EngineScriptWorld : IScriptWorld {
             Meter = callerContext.Meter,
         };
 
-        var result = await _scriptRuntime.ExecuteAsync(context, mooVerb.Implementation);
+        var result = await _scriptRuntime.ExecuteAsync(context, mooVerb.Code);
 
         if (!result.IsSuccess) {
             var message = result.Error ?? "Script failed.";
@@ -210,7 +226,25 @@ public sealed class EngineScriptWorld : IScriptWorld {
             obj.Aliases.Add(alias);
     }
 
-    public void AddVerb(ObjectId objId, string verbNames, string script, ObjectId ownerId) {
+    public void AddProperty(ObjectId objId, string propName, MooValue value, ObjectId ownerId, PropertyFlags flags) {
+        var obj = _objects.Get(objId)
+            ?? throw new MooScriptException(MooErrorCode.E_INVARG, $"Object {objId} not found.");
+
+        if (string.IsNullOrWhiteSpace(propName))
+            throw new MooScriptException(MooErrorCode.E_INVARG, "Property name cannot be empty.");
+
+        if (_resolver.FindProperty(objId, propName) is not null)
+            throw new MooScriptException(MooErrorCode.E_INVARG, $"Property already exists: {propName}");
+
+        obj.Properties[propName] = new MooProperty {
+            Name = propName,
+            OwnerId = ownerId,
+            Flags = flags,
+            Value = value
+        };
+    }
+
+    public long AddVerb(ObjectId objId, string verbNames, string script, ObjectId ownerId) {
         var obj = _objects.Get(objId)
             ?? throw new InvalidOperationException($"Object {objId} not found.");
 
@@ -220,13 +254,42 @@ public sealed class EngineScriptWorld : IScriptWorld {
             Preposition = "none",
             IndirectObject = VerbObjectSpec.None,
             ImplementationKind = VerbImplementationKind.Script,
-            Implementation = script
+            Code = script
         };
 
         foreach (var name in verbNames.Split(',').Select(n => n.Trim()).Where(n => n.Length > 0))
             verb.Names.Add(name);
 
         obj.Verbs.Add(verb);
+        return obj.Verbs.Count;
+    }
+
+    public long AddVerb(ObjectId objId, ObjectId ownerId, VerbFlags flags, string verbNames,
+        VerbObjectSpec directObject, string preposition, VerbObjectSpec indirectObject) {
+
+        var obj = _objects.Get(objId)
+            ?? throw new MooScriptException(MooErrorCode.E_INVARG, $"Object {objId} not found.");
+
+        var names = verbNames
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+
+        if (names.Count == 0)
+            throw new MooScriptException(MooErrorCode.E_INVARG, "Verb names cannot be empty.");
+
+        var verb = new MooVerb {
+            OwnerId = ownerId,
+            Flags = flags,
+            DirectObject = directObject,
+            Preposition = preposition,
+            IndirectObject = indirectObject,
+            ImplementationKind = VerbImplementationKind.Script,
+            Code = ""
+        };
+
+        verb.Names.AddRange(names);
+        obj.Verbs.Add(verb);
+        return obj.Verbs.Count;
     }
 
     public MooValue GetVerbNames(ObjectId id) {
@@ -301,11 +364,7 @@ public sealed class EngineScriptWorld : IScriptWorld {
         var verb = ResolveVerb(obj, verbRef);
         if (verb is null) return null;
 
-        var code = verb.ImplementationKind == VerbImplementationKind.Script
-            ? verb.Implementation
-            : verb.Code;
-
-        var lines = code
+        var lines = verb.Code
             .Replace("\r\n", "\n")
             .Replace('\r', '\n')
             .Split('\n')
@@ -313,6 +372,21 @@ public sealed class EngineScriptWorld : IScriptWorld {
             .ToList();
 
         return new MooValue.List(lines);
+    }
+
+    public void SetVerbCode(ObjectId id, MooValue verbRef, IReadOnlyList<string> codeLines) {
+        var obj = _objects.Get(id);
+        if (obj is null)
+            throw new MooScriptException(MooErrorCode.E_INVARG, $"Object {id} not found.");
+
+        var verb = ResolveVerb(obj, verbRef);
+        if (verb is null)
+            throw new MooScriptException(MooErrorCode.E_VERBNF, $"Verb not found: {verbRef}");
+
+        if (verb.ImplementationKind != VerbImplementationKind.Script)
+            throw new MooScriptException(MooErrorCode.E_INVARG, "Cannot set code on a non-script verb.");
+
+        verb.Code = string.Join("\n", codeLines);
     }
 
     private static MooVerb? ResolveVerb(MooObject obj, MooValue verbRef)
@@ -331,6 +405,40 @@ public sealed class EngineScriptWorld : IScriptWorld {
             obj.Properties.Keys
                 .Select(name => (MooValue)new MooValue.String(name))
                 .ToList());
+    }
+
+    public MooValue? GetPropertyInfo(ObjectId id, string propName) {
+        var property = _resolver.FindProperty(id, propName);
+        if (property is null)
+            return null;
+
+        return new MooValue.List([
+            new MooValue.Object(property.OwnerId),
+            new MooValue.String(PropertyPermissions(property.Flags))
+        ]);
+    }
+
+    public bool IsClearProperty(ObjectId id, string propName) {
+        var obj = _objects.Get(id)
+            ?? throw new MooScriptException(MooErrorCode.E_INVARG, $"Object {id} not found.");
+
+        return obj.Properties.TryGetValue(propName, out var property)
+            && property.Value is MooValue.Clear;
+    }
+
+    private static string PropertyPermissions(PropertyFlags flags) {
+        var permissions = "";
+
+        if (flags.HasFlag(PropertyFlags.Readable))
+            permissions += "r";
+
+        if (flags.HasFlag(PropertyFlags.Writable))
+            permissions += "w";
+
+        if (flags.HasFlag(PropertyFlags.Chown))
+            permissions += "c";
+
+        return permissions;
     }
 
     private bool WouldContain(ObjectId objId, ObjectId destId) {

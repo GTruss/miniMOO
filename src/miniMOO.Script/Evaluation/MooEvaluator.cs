@@ -264,6 +264,9 @@ public sealed class MooEvaluator {
             case VerbCallExpressionNode verbCall:
                 return await EvaluateVerbCallAsync(verbCall);
 
+            case DynamicVerbCallExpressionNode verbCall:
+                return await EvaluateDynamicVerbCallAsync(verbCall);
+
             case FunctionCallExpressionNode functionCall:
                 return await EvaluateFunctionCallAsync(functionCall);
 
@@ -501,7 +504,7 @@ public sealed class MooEvaluator {
     }
 
     private static MooValue.String SliceString(string value, int start, int end) {
-        if (start < 1 || start > value.Length + 1)
+        if (start < 1)
             throw MooError(MooErrorCode.E_RANGE,
                 $"String slice start {start} out of range (length {value.Length}).");
 
@@ -512,11 +515,15 @@ public sealed class MooEvaluator {
         if (end < start)
             return new MooValue.String("");
 
+        if (start > value.Length)
+            throw MooError(MooErrorCode.E_RANGE,
+                $"String slice start {start} out of range (length {value.Length}).");
+
         return new MooValue.String(value.Substring(start - 1, end - start + 1));
     }
 
     private static MooValue.List SliceList(IReadOnlyList<MooValue> items, int start, int end) {
-        if (start < 1 || start > items.Count + 1)
+        if (start < 1)
             throw MooError(MooErrorCode.E_RANGE,
                 $"List slice start {start} out of range (length {items.Count}).");
 
@@ -526,6 +533,10 @@ public sealed class MooEvaluator {
 
         if (end < start)
             return new MooValue.List([]);
+
+        if (start > items.Count)
+            throw MooError(MooErrorCode.E_RANGE,
+                $"List slice start {start} out of range (length {items.Count}).");
 
         return new MooValue.List(items.Skip(start - 1).Take(end - start + 1).ToList());
     }
@@ -687,6 +698,35 @@ public sealed class MooEvaluator {
         return result.Value;
     }
 
+    private async Task<MooValue?> EvaluateDynamicVerbCallAsync(DynamicVerbCallExpressionNode verbCall) {
+        var target = await EvaluateExpressionAsync(verbCall.Target);
+
+        if (target is not MooValue.Object obj)
+            throw MooError(MooErrorCode.E_TYPE, "Cannot call dynamic verb on non-object value.");
+
+        var verbName = await EvaluateVerbNameAsync(verbCall.VerbName);
+        var args = await EvaluateArgumentsAsync(verbCall.Arguments);
+        var result = await _context.World.InvokeVerbAsync(_context, obj.Value, verbName, args);
+
+        if (!result.IsSuccess) {
+            if (result.ErrorDetail is not null)
+                throw new MooScriptException(result.ErrorDetail);
+
+            throw new MooEvaluationException("Verb call failed.");
+        }
+
+        return result.Value;
+    }
+
+    private async Task<string> EvaluateVerbNameAsync(ExpressionNode expression) {
+        var value = await EvaluateExpressionAsync(expression) ?? MooValue.NothingValue;
+
+        return value switch {
+            MooValue.String s => s.Value,
+            _ => throw MooError(MooErrorCode.E_TYPE, "Dynamic verb name must be a string.")
+        };
+    }
+
     private async Task<IReadOnlyList<MooValue>> EvaluateArgumentsAsync(
         IReadOnlyList<ExpressionNode> arguments) {
 
@@ -800,6 +840,9 @@ public sealed class MooEvaluator {
 
         return name switch {
             "notify" => await NotifyAsync(args),
+            "read" => await ReadAsync(args),
+            "task_id" => TaskId(args),
+            "kill_task" => KillTask(args),
             "tostr" => new MooValue.String(string.Concat(args.Select(MooToString))),
             "str" => new MooValue.String(args.Count > 0 ? MooToString(args[0]) : ""),
             "eval" => await EvalAsync(args),
@@ -824,11 +867,15 @@ public sealed class MooEvaluator {
             "strsub" => StrSub(args),
             "add_alias" => AddAlias(args),
             "add_verb" => AddVerbBuiltin(args),
+            "add_property" => AddProperty(args),
             "verbs" => Verbs(args),
             "verb_info" => VerbInfo(args),
             "verb_args" => VerbArgs(args),
             "verb_code" => VerbCode(args),
+            "set_verb_code" => SetVerbCode(args),
             "properties" => Properties(args),
+            "property_info" => PropertyInfo(args),
+            "is_clear_property" => IsClearProperty(args),
             "match" => Match(args),
             "rmatch" => RMatch(args),
             "ticks_left" => TicksLeft(args),
@@ -874,6 +921,30 @@ public sealed class MooEvaluator {
 
         await _context.World.NotifyAsync(target.Value, args.Skip(1).ToList());
         return MooValue.NothingValue;
+    }
+
+    private async Task<MooValue> ReadAsync(IReadOnlyList<MooValue> args) {
+        if (args.Count > 0)
+            throw MooError(MooErrorCode.E_ARGS, "read() does not support arguments yet.");
+
+        return await _context.World.ReadInputAsync(_context.PlayerId);
+    }
+
+    private MooValue TaskId(IReadOnlyList<MooValue> args) {
+        if (args.Count > 0)
+            throw MooError(MooErrorCode.E_ARGS, "task_id() does not take arguments.");
+
+        return new MooValue.Integer(1);
+    }
+
+    private static MooValue KillTask(IReadOnlyList<MooValue> args) {
+        if (args.Count < 1 || args[0] is not MooValue.Integer taskId)
+            throw MooError(MooErrorCode.E_TYPE, "kill_task() requires a task id.");
+
+        if (taskId.Value != 1)
+            throw MooError(MooErrorCode.E_INVARG, "Invalid task id.");
+
+        throw new MooTaskAbortException();
     }
 
     // ── Helpers ───────────────────────────────────────────────────
@@ -1157,13 +1228,60 @@ public sealed class MooEvaluator {
     }
 
     private MooValue AddVerbBuiltin(IReadOnlyList<MooValue> args) {
-        if (args.Count < 3
-            || args[0] is not MooValue.Object obj
-            || args[1] is not MooValue.String names
-            || args[2] is not MooValue.String script)
-            throw MooError(MooErrorCode.E_TYPE, "add_verb() requires an object, a name string, and a script string.");
+        if (args.Count < 3 || args[0] is not MooValue.Object obj)
+            throw MooError(MooErrorCode.E_TYPE, "add_verb() requires an object, verb info, and verb args.");
 
-        _context.World.AddVerb(obj.Value, names.Value, script.Value, _context.PlayerId);
+        if (args[1] is MooValue.String names && args[2] is MooValue.String script) {
+            var index = _context.World.AddVerb(obj.Value, names.Value, script.Value, _context.PlayerId);
+            return new MooValue.Integer(index);
+        }
+
+        if (args[1] is not MooValue.List info || args[2] is not MooValue.List verbArgs)
+            throw MooError(MooErrorCode.E_TYPE, "add_verb() requires {owner, perms, names} and {dobj, prep, iobj}.");
+
+        if (info.Items.Count < 3
+            || info.Items[0] is not MooValue.Object owner
+            || info.Items[1] is not MooValue.String perms
+            || info.Items[2] is not MooValue.String verbNames)
+            throw MooError(MooErrorCode.E_INVARG, "add_verb() info must be {owner, perms, names}.");
+
+        if (verbArgs.Items.Count < 3
+            || verbArgs.Items[0] is not MooValue.String directObject
+            || verbArgs.Items[1] is not MooValue.String preposition
+            || verbArgs.Items[2] is not MooValue.String indirectObject)
+            throw MooError(MooErrorCode.E_INVARG, "add_verb() args must be {dobj, prep, iobj}.");
+
+        var newIndex = _context.World.AddVerb(
+            obj.Value,
+            owner.Value,
+            ParseVerbFlags(perms.Value),
+            verbNames.Value,
+            ParseVerbObjectSpec(directObject.Value),
+            preposition.Value,
+            ParseVerbObjectSpec(indirectObject.Value));
+
+        return new MooValue.Integer(newIndex);
+    }
+
+    private MooValue AddProperty(IReadOnlyList<MooValue> args) {
+        if (args.Count < 4
+            || args[0] is not MooValue.Object obj
+            || args[1] is not MooValue.String propName
+            || args[3] is not MooValue.List info)
+            throw MooError(MooErrorCode.E_TYPE, "add_property() requires an object, property name, value, and info.");
+
+        if (info.Items.Count < 2
+            || info.Items[0] is not MooValue.Object owner
+            || info.Items[1] is not MooValue.String perms)
+            throw MooError(MooErrorCode.E_INVARG, "add_property() info must be {owner, perms}.");
+
+        _context.World.AddProperty(
+            obj.Value,
+            propName.Value,
+            args[2],
+            owner.Value,
+            ParsePropertyFlags(perms.Value));
+
         return MooValue.NothingValue;
     }
 
@@ -1204,11 +1322,52 @@ public sealed class MooEvaluator {
             ?? throw new MooScriptException(MooErrorCode.E_VERBNF, $"Verb not found: {MooToString(args[1])}");
     }
 
+    private MooValue SetVerbCode(IReadOnlyList<MooValue> args) {
+        if (args.Count < 3
+            || args[0] is not MooValue.Object obj
+            || args[1] is not (MooValue.String or MooValue.Integer))
+            throw MooError(MooErrorCode.E_TYPE, "set_verb_code() requires an object, a verb name or number, and a list of strings.");
+
+        if (args[2] is not MooValue.List lines)
+            throw MooError(MooErrorCode.E_TYPE, "set_verb_code() requires code as a list of strings.");
+
+        var codeLines = new List<string>();
+
+        foreach (var line in lines.Items) {
+            if (line is not MooValue.String s)
+                throw MooError(MooErrorCode.E_TYPE, "set_verb_code() code list must contain only strings.");
+
+            codeLines.Add(s.Value);
+        }
+
+        _context.World.SetVerbCode(obj.Value, args[1], codeLines);
+        return MooValue.NothingValue;
+    }
+
     private MooValue Properties(IReadOnlyList<MooValue> args) {
         if (args.Count < 1 || args[0] is not MooValue.Object obj)
             throw MooError(MooErrorCode.E_TYPE, "properties() requires an object.");
 
         return _context.World.GetPropertyNames(obj.Value);
+    }
+
+    private MooValue PropertyInfo(IReadOnlyList<MooValue> args) {
+        if (args.Count < 2
+            || args[0] is not MooValue.Object obj
+            || args[1] is not MooValue.String propName)
+            throw MooError(MooErrorCode.E_TYPE, "property_info() requires an object and a property name.");
+
+        return _context.World.GetPropertyInfo(obj.Value, propName.Value)
+            ?? throw new MooScriptException(MooErrorCode.E_PROPNF, $"Property not found: {propName.Value}");
+    }
+
+    private MooValue IsClearProperty(IReadOnlyList<MooValue> args) {
+        if (args.Count < 2
+            || args[0] is not MooValue.Object obj
+            || args[1] is not MooValue.String propName)
+            throw MooError(MooErrorCode.E_TYPE, "is_clear_property() requires an object and a property name.");
+
+        return new MooValue.Integer(_context.World.IsClearProperty(obj.Value, propName.Value) ? 1 : 0);
     }
 
     private static MooValue Match(IReadOnlyList<MooValue> args)
@@ -1257,7 +1416,7 @@ public sealed class MooEvaluator {
             throw MooError(MooErrorCode.E_INVARG, $"match()/rmatch() invalid pattern: {ex.Message}");
         }
 
-        if (!match.Success)
+        if (!match.Success || match.Length == 0)
             return new MooValue.List([]);
 
         var replacements = new List<MooValue>();
@@ -1578,7 +1737,11 @@ public sealed class MooEvaluator {
             var ch = pattern[i];
 
             if (ch != '%') {
-                result.Append(ch);
+                if (ch == '\\')
+                    result.Append(@"\\");
+                else
+                    result.Append(ch);
+
                 continue;
             }
 
@@ -1602,6 +1765,45 @@ public sealed class MooEvaluator {
 
         return result.ToString();
     }
+
+    private static VerbFlags ParseVerbFlags(string perms) {
+        var flags = VerbFlags.None;
+
+        foreach (var ch in perms) {
+            flags |= char.ToLowerInvariant(ch) switch {
+                'r' => VerbFlags.Readable,
+                'w' => VerbFlags.Writable,
+                'x' => VerbFlags.Executable,
+                'd' => VerbFlags.Debug,
+                _ => throw MooError(MooErrorCode.E_INVARG, $"Invalid verb permission flag: {ch}")
+            };
+        }
+
+        return flags;
+    }
+
+    private static PropertyFlags ParsePropertyFlags(string perms) {
+        var flags = PropertyFlags.None;
+
+        foreach (var ch in perms) {
+            flags |= char.ToLowerInvariant(ch) switch {
+                'r' => PropertyFlags.Readable,
+                'w' => PropertyFlags.Writable,
+                'c' => PropertyFlags.Chown,
+                _ => throw MooError(MooErrorCode.E_INVARG, $"Invalid property permission flag: {ch}")
+            };
+        }
+
+        return flags;
+    }
+
+    private static VerbObjectSpec ParseVerbObjectSpec(string value)
+        => value.ToLowerInvariant() switch {
+            "none" => VerbObjectSpec.None,
+            "any" => VerbObjectSpec.Any,
+            "this" => VerbObjectSpec.This,
+            _ => throw MooError(MooErrorCode.E_INVARG, $"Invalid verb object spec: {value}")
+        };
 
     private void Tick() {
         if (!_context.Meter.TryTick(out var error))

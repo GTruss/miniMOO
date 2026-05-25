@@ -31,7 +31,6 @@ public sealed class FileObjectMaterializer {
                 Preposition = verb.Preposition,
                 IndirectObject = verb.IndirectObject,
                 ImplementationKind = verb.ImplementationKind,
-                Implementation = verb.Code,
                 Code = verb.Code
             };
 

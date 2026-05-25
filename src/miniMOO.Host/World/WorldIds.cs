@@ -27,10 +27,14 @@ public static class WorldIds {
     public static readonly ObjectId Wiz = new(57);
     public static readonly ObjectId Prog = new(58);
     public static readonly ObjectId FrandsPlayerClass = new(88);
+
+    public static readonly ObjectId GenericEditor = new(50);
+    public static readonly ObjectId VerbEditor = new(49);
     
     public static readonly ObjectId GenericOptionPackage = new(68);
     public static readonly ObjectId GenericUtilitiesPackage = new(78);
 
+    public static readonly ObjectId DisplayOptions = new(67);
     public static readonly ObjectId BuilderOptions = new(77);
     public static readonly ObjectId ProgrammerOptions = new(76);
 
