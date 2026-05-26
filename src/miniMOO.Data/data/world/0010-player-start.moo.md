@@ -7,8 +7,8 @@ location:
 flags:
   - readable
 aliases: []
-created: 2026-05-25T00:00
-updated: 2026-05-25T13:05
+updated: 2026-05-25T17:20
+created: 2026-05-25T13:05
 ---
 
 # $player_start
@@ -16,5 +16,8 @@ updated: 2026-05-25T13:05
 ```yaml
 name: description
 type: string
-value: A featureless expanse. You feel like you haven't quite arrived yet.
+value: "A featureless expanse. You feel like you haven't quite arrived yet."
+flags:
+  - readable
 ```
+

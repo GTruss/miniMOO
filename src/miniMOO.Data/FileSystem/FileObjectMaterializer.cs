@@ -44,6 +44,7 @@ public sealed class FileObjectMaterializer {
     private static MooValue ToMooValue(FileMooValueDefinition definition)
         => definition.Type.ToLowerInvariant() switch {
             "nothing" => MooValue.NothingValue,
+            "clear" => MooValue.ClearValue,
             "integer" => new MooValue.Integer(Convert.ToInt64(definition.Value)),
             "float" => new MooValue.Float(Convert.ToDouble(definition.Value)),
             "string" => new MooValue.String(Convert.ToString(definition.Value) ?? ""),
@@ -52,6 +53,7 @@ public sealed class FileObjectMaterializer {
                     ?? Array.Empty<FileMooValueDefinition>()))
                 .Select(ToMooValue)
                 .ToList()),
+            "error" => new MooValue.Error(Convert.ToInt32(definition.Value)),
             _ => throw new FileWorldLoadException($"Unsupported MOO value type: {definition.Type}")
         };
 

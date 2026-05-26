@@ -727,6 +727,25 @@ public static partial class WorldSeeder {
             endif
 
             this._test_fork_cancelled = 0;
+            fork queued_task (60)
+              this._test_fork_cancelled = 1;
+            endfork
+            found_task = 0;
+            for t in (queued_tasks())
+              if (t[1] == queued_task && t[5] == player && t[7] == verb)
+                found_task = 1;
+              endif
+            endfor
+            kill_task(queued_task);
+            if (found_task && !this._test_fork_cancelled)
+              player:tell("PASS: queued_tasks()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: queued_tasks()");
+              failed = failed + 1;
+            endif
+
+            this._test_fork_cancelled = 0;
             fork doomed_task (1)
               this._test_fork_cancelled = 1;
             endfork
@@ -1246,6 +1265,37 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            if (caller_perms() == player)
+              player:tell("PASS: caller_perms()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: caller_perms()");
+              failed = failed + 1;
+            endif
+
+            now = time();
+            if (typeof(now) == INT && now > 0)
+              player:tell("PASS: time()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: time()");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              raise(E_PERM, "forced permission error");
+            except (E_PERM)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: raise()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: raise()");
+              failed = failed + 1;
+            endif
+
             player:tell("---");
             player:tell(passed, " builtin tests passed, ", failed, " failed.");
         """));
@@ -1378,6 +1428,16 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            eval_command("@edit sttoy:wind", {"replace 1", "player:tell(\"Script toy edited.\");", "compile"});
+            code = verb_code(toy, "wind");
+            if (length(code) == 1 && $string_utils:trim(code[1]) == "player:tell(\"Script toy edited.\");")
+              player:tell("PASS: eval_command() @edit");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @edit");
+              failed = failed + 1;
+            endif
+
             eval_command("@program sttoy:drop", {"pass(@args);", "player:tell(\"Script toy drops.\");", "."});
             code = verb_code(toy, "throw");
             if (length(code) == 2 && $string_utils:trim(code[1]) == "pass(@args);" && $string_utils:trim(code[2]) == "player:tell(\"Script toy drops.\");")
@@ -1418,6 +1478,53 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: eval_command() programmed verb execution");
+              failed = failed + 1;
+            endif
+
+            fork forked_test_task (60)
+              player:tell("This should have been killed.");
+            endfork
+            if (eval_command("@forked"))
+              player:tell("PASS: eval_command() @forked");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @forked");
+              failed = failed + 1;
+            endif
+            kill_task(forked_test_task);
+
+            eval_command("@shutdown in 60 script test shutdown");
+            shutdown_task = $shutdown_task;
+            found_shutdown = 0;
+            if (typeof(shutdown_task) == INT)
+              for t in (queued_tasks())
+                if (t[1] == shutdown_task)
+                  found_shutdown = 1;
+                endif
+              endfor
+            endif
+
+            if (found_shutdown)
+              player:tell("PASS: eval_command() @shutdown schedules task");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @shutdown schedules task");
+              failed = failed + 1;
+            endif
+
+            eval_command("@abort-shutdown script test abort");
+            still_queued = 0;
+            for t in (queued_tasks())
+              if (t[1] == shutdown_task)
+                still_queued = 1;
+              endif
+            endfor
+
+            if (!still_queued && $shutdown_task == E_NONE)
+              player:tell("PASS: eval_command() @abort-shutdown");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @abort-shutdown");
               failed = failed + 1;
             endif
 

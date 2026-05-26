@@ -14,6 +14,14 @@ public static partial class WorldSeeder {
         repo.Add(materializer.ToMooObject(loader.LoadObject(WorldDataPath(path))));
     }
 
+    private static void AddFileObjects(InMemoryObjectRepository repo, params string[] path) {
+        var loader = new FileWorldLoader();
+        var materializer = new FileObjectMaterializer();
+
+        foreach (var definition in loader.LoadDirectory(WorldDataPath(path)).Objects)
+            repo.Add(materializer.ToMooObject(definition));
+    }
+
     private static MooObject Obj(
         ObjectId id,
         ObjectId ownerId,

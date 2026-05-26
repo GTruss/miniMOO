@@ -9,8 +9,8 @@ flags:
 aliases:
   - staff
   - gnarled staff
-created: 2026-05-25T00:00
-updated: 2026-05-25T13:05
+updated: 2026-05-25T17:20
+created: 2026-05-25T13:05
 ---
 
 # a gnarled staff
@@ -18,5 +18,8 @@ updated: 2026-05-25T13:05
 ```yaml
 name: description
 type: string
-value: A twisted length of dark wood, warm to the touch.
+value: "A twisted length of dark wood, warm to the touch."
+flags:
+  - readable
 ```
+

@@ -7,8 +7,8 @@ location:
 flags:
   - readable
 aliases: []
-created: 2026-05-25T00:00
-updated: 2026-05-25T13:05
+updated: 2026-05-25T17:20
+created: 2026-05-25T13:05
 ---
 
 # The Foyer
@@ -17,16 +17,23 @@ updated: 2026-05-25T13:05
 name: description
 type: string
 value: "A modest entry hall. Pale light filters through frosted glass. A corridor leads east toward the library,\nand ornate double doors on the north side of the room open to the grand ballroom"
-```
-
-```yaml
-name: exits
-type: list
-value: ["#104"]
+flags:
+  - readable
 ```
 
 ```yaml
 name: entrances
 type: list
 value: ["#105"]
+flags:
+  - readable
 ```
+
+```yaml
+name: exits
+type: list
+value: ["#104"]
+flags:
+  - readable
+```
+

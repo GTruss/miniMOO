@@ -190,6 +190,14 @@ public sealed class MooEvaluator {
 
         var taskId = ScriptTaskScheduler.Schedule(
             TimeSpan.FromSeconds(delaySeconds),
+            new ScheduledTaskInfo(
+                0,
+                0,
+                _context.PlayerId,
+                _context.DefiningObjectId ?? _context.ThisId,
+                _context.Verb,
+                1,
+                _context.ThisId),
             async (scheduledTaskId, cancellationToken) => {
                 var context = new ScriptContext {
                     TaskId = scheduledTaskId,
@@ -913,10 +921,16 @@ public sealed class MooEvaluator {
             "read" => await ReadAsync(args),
             "task_id" => TaskId(args),
             "kill_task" => KillTask(args),
+            "queued_tasks" => QueuedTasks(args),
+            "caller_perms" => CallerPerms(args),
+            "raise" => Raise(args),
+            "time" => Time(args),
             "tostr" => new MooValue.String(string.Concat(args.Select(MooToString))),
             "str" => new MooValue.String(args.Count > 0 ? MooToString(args[0]) : ""),
             "eval" => await EvalAsync(args),
             "eval_command" => await EvalCommandAsync(args),
+            "checkpoint" => await CheckpointAsync(args),
+            "shutdown" => await ShutdownAsync(args),
             "valid" => Valid(args),
             "is_player" => IsPlayer(args),
             "length" => Length(args),
@@ -1024,6 +1038,58 @@ public sealed class MooEvaluator {
             throw MooError(MooErrorCode.E_INVARG, "Invalid task id.");
 
         return MooValue.NothingValue;
+    }
+
+    private static MooValue QueuedTasks(IReadOnlyList<MooValue> args) {
+        if (args.Count > 0)
+            throw MooError(MooErrorCode.E_ARGS, "queued_tasks() does not take arguments.");
+
+        return new MooValue.List(
+            ScriptTaskScheduler.QueuedTasks()
+                .Select(task => (MooValue)new MooValue.List([
+                    new MooValue.Integer(task.Id),
+                    new MooValue.Integer(task.StartTime),
+                    new MooValue.Integer(0),
+                    new MooValue.Integer(20000),
+                    new MooValue.Object(task.OwnerId),
+                    new MooValue.Object(task.VerbLocationId),
+                    new MooValue.String(task.VerbName),
+                    new MooValue.Integer(task.LineNumber),
+                    new MooValue.Object(task.ThisId),
+                    new MooValue.Integer(0)
+                ]))
+                .ToList());
+    }
+
+    private MooValue CallerPerms(IReadOnlyList<MooValue> args) {
+        if (args.Count > 0)
+            throw MooError(MooErrorCode.E_ARGS, "caller_perms() does not take arguments.");
+
+        return new MooValue.Object(_context.PlayerId);
+    }
+
+    private static MooValue Raise(IReadOnlyList<MooValue> args) {
+        if (args.Count < 1)
+            throw MooError(MooErrorCode.E_ARGS, "raise() requires an error code.");
+
+        var code = args[0] switch {
+            MooValue.Error e => e.Code,
+            MooValue.Integer i => (int)i.Value,
+            _ => throw MooError(MooErrorCode.E_TYPE, "raise() requires an error code.")
+        };
+
+        var message = args.Count >= 2
+            ? MooToString(args[1])
+            : MooErrorName(code);
+
+        throw new MooScriptException(code, message);
+    }
+
+    private static MooValue Time(IReadOnlyList<MooValue> args) {
+        if (args.Count > 0)
+            throw MooError(MooErrorCode.E_ARGS, "time() does not take arguments.");
+
+        return new MooValue.Integer(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
     }
 
     // ── Helpers ───────────────────────────────────────────────────
@@ -1199,6 +1265,28 @@ public sealed class MooEvaluator {
 
         await _context.World.EvalCommandAsync(_context.PlayerId, command.Value, inputLines);
         return new MooValue.Integer(1);
+    }
+
+    private async Task<MooValue> CheckpointAsync(IReadOnlyList<MooValue> args) {
+        if (args.Count > 0)
+            throw MooError(MooErrorCode.E_ARGS, "checkpoint() does not take arguments.");
+
+        return await _context.World.CheckpointAsync();
+    }
+
+    private async Task<MooValue> ShutdownAsync(IReadOnlyList<MooValue> args) {
+        if (args.Count > 1)
+            throw MooError(MooErrorCode.E_ARGS, "shutdown() takes at most one argument.");
+
+        var player = _context.World.Get(_context.PlayerId);
+        if (player is null || !player.Flags.HasFlag(ObjectFlags.Wizard))
+            throw MooError(MooErrorCode.E_PERM, "shutdown() requires wizard permissions.");
+
+        var message = args.Count == 0
+            ? ""
+            : MooToString(args[0]);
+
+        return await _context.World.ShutdownAsync(message);
     }
 
     private static MooValue ListSet(IReadOnlyList<MooValue> args) {

@@ -129,7 +129,10 @@ internal sealed class YamlLite {
         if (value.Length >= 2
             && ((value[0] == '"' && value[^1] == '"')
                 || (value[0] == '\'' && value[^1] == '\''))) {
-            return value[1..^1].Replace("\\n", "\n");
+            return value[1..^1]
+                .Replace("\\n", "\n")
+                .Replace("\\\"", "\"")
+                .Replace("\\\\", "\\");
         }
 
         return value;

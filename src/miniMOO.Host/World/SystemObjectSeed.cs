@@ -1,3 +1,4 @@
+using miniMOO.Core.ScriptRuntime;
 using miniMOO.Core.Things;
 using miniMOO.Engine.Repositories;
 
@@ -7,6 +8,9 @@ public static partial class WorldSeeder {
     private static void AddSystemObject(InMemoryObjectRepository repo) {
         var sysObj = Obj(ObjectId.System, ObjectId.System, null, null, "The System Object");
         Prop(sysObj, "maxint", new MooValue.Integer(long.MaxValue));
+        Prop(sysObj, "shutdown_task", new MooValue.Error(MooErrorCode.E_NONE));
+        Prop(sysObj, "shutdown_time", new MooValue.Integer(0));
+        Prop(sysObj, "shutdown_message", "");
 
         Prop(sysObj, "root", new MooValue.Object(WorldIds.Root));
         Prop(sysObj, "root_class", new MooValue.Object(WorldIds.Root));

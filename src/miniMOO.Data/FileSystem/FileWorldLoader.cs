@@ -20,7 +20,9 @@ public sealed class FileWorldLoader {
 
     public FileObjectDefinition LoadObject(string path) {
         try {
-            var text = File.ReadAllText(path).Replace("\r\n", "\n").Replace('\r', '\n');
+            var text = StripBom(File.ReadAllText(path))
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n');
             return ParseObject(text, path);
         }
         catch (FileWorldLoadException) {
@@ -102,7 +104,9 @@ public sealed class FileWorldLoader {
         var type = block.OptionalString("type") ?? "string";
         var rawValue = block.OptionalRaw("value");
 
-        if (rawValue is null && type != "nothing")
+        if (rawValue is null
+            && !type.Equals("nothing", StringComparison.OrdinalIgnoreCase)
+            && !type.Equals("clear", StringComparison.OrdinalIgnoreCase))
             throw new FileWorldLoadException($"{path}: property '{name}' is missing required field 'value'.");
 
         return new FilePropertyDefinition {
@@ -131,21 +135,34 @@ public sealed class FileWorldLoader {
     }
 
     private static YamlLite ReadFrontmatter(string[] lines, string path, out int contentStartLine) {
-        contentStartLine = 0;
-
-        if (lines.Length == 0 || lines[0].Trim() != "---")
-            throw new FileWorldLoadException($"{path}: object file must begin with YAML-lite frontmatter.");
-
-        for (var i = 1; i < lines.Length; i++) {
-            if (lines[i].Trim() != "---")
+        for (var start = 0; start < lines.Length; start++) {
+            if (StripBom(lines[start]).Trim() != "---")
                 continue;
 
-            contentStartLine = i + 1;
-            return YamlLite.Parse(string.Join('\n', lines[1..i]));
+            for (var end = start + 1; end < lines.Length; end++) {
+                if (StripBom(lines[end]).Trim() != "---")
+                    continue;
+
+                var frontmatter = YamlLite.Parse(string.Join('\n', lines[(start + 1)..end]));
+                if (!frontmatter.Has("id")) {
+                    start = end;
+                    break;
+                }
+
+                contentStartLine = end + 1;
+                return frontmatter;
+            }
         }
 
-        throw new FileWorldLoadException($"{path}: frontmatter is missing closing '---'.");
+        contentStartLine = 0;
+
+        throw new FileWorldLoadException($"{path}: object file must contain YAML-lite frontmatter with an 'id' field.");
     }
+
+    private static string StripBom(string value)
+        => value.Length > 0 && value[0] == '\uFEFF'
+            ? value[1..]
+            : value;
 
     private static bool TryReadFence(string[] lines, int startLine, out MarkdownFence fence) {
         fence = default;
@@ -173,6 +190,7 @@ public sealed class FileWorldLoader {
         try {
             return type.ToLowerInvariant() switch {
                 "nothing" => new FileMooValueDefinition { Type = "nothing" },
+                "clear" => new FileMooValueDefinition { Type = "clear" },
                 "integer" or "int" => new FileMooValueDefinition {
                     Type = "integer",
                     Value = long.Parse(rawValue ?? "0")
@@ -194,6 +212,10 @@ public sealed class FileWorldLoader {
                     Value = YamlLite.ParseArray(rawValue ?? "[]")
                         .Select(InferScalarValue)
                         .ToList()
+                },
+                "error" => new FileMooValueDefinition {
+                    Type = "error",
+                    Value = int.Parse(rawValue ?? "0")
                 },
                 _ => throw new FileWorldLoadException($"Unsupported MOO value type: {type}")
             };

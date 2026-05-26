@@ -1,4 +1,5 @@
 ﻿using miniMOO.Core.Things;
+using miniMOO.Data.FileSystem;
 using miniMOO.Engine.Parser;
 using miniMOO.Host.World;
 using miniMOO.Engine.Repositories;
@@ -17,6 +18,9 @@ public class GameRunner {
     private OutputService _output = null!;
     private PermissionService _permissionService = null!;
     private ITerminal _terminal = null!;
+    private bool _shutdownRequested;
+    private string _shutdownMessage = "";
+    private bool _dispatchingCommand;
 
     private readonly ObjectId _playerId = WorldSeeder.WizardId;
 
@@ -37,6 +41,8 @@ public class GameRunner {
         _resolver = new ObjectResolver(_objects);
 
         var scriptWorld = new EngineScriptWorld(_objects, _resolver, _output, scriptRuntime);
+        scriptWorld.SetCheckpoint(() => Task.FromResult(CheckpointWorld()));
+        scriptWorld.SetShutdown(message => Task.FromResult(RequestShutdown(message)));
 
         _dispatcher = new CommandDispatcher(_objects, _output, 
             _permissionService, scriptRuntime, scriptWorld, _resolver);
@@ -65,7 +71,22 @@ public class GameRunner {
             }
 
             var command = _parser.Parse(_playerId, input);
-            _dispatcher.Dispatch(_playerId, command);
+
+            _dispatchingCommand = true;
+            try {
+                _dispatcher.Dispatch(_playerId, command);
+            }
+            finally {
+                _dispatchingCommand = false;
+            }
+
+            if (_shutdownRequested) {
+                if (!string.IsNullOrWhiteSpace(_shutdownMessage))
+                    _terminal.WriteLine(_shutdownMessage);
+
+                _terminal.WriteLine("Goodbye!");
+                break;
+            }
         }
     }
 
@@ -83,4 +104,33 @@ public class GameRunner {
 
         _output.Notify(_playerId, desc);
     }
+
+    private MooValue CheckpointWorld() {
+        var writer = new FileWorldWriter();
+        var worldPath = Path.Combine(AppContext.BaseDirectory, "data", "world");
+        var count = writer.WriteDirectory(worldPath, WorldObjects());
+
+        return new MooValue.String($"Checkpoint complete: {count} world objects written.");
+    }
+
+    private MooValue RequestShutdown(string message) {
+        _shutdownRequested = true;
+        _shutdownMessage = message;
+
+        if (!_dispatchingCommand) {
+            if (!string.IsNullOrWhiteSpace(_shutdownMessage))
+                _terminal.WriteLine(_shutdownMessage);
+
+            _terminal.WriteLine("Goodbye!");
+            Environment.Exit(0);
+        }
+
+        return MooValue.NothingValue;
+    }
+
+    private IEnumerable<MooObject> WorldObjects()
+        => _objects.All()
+            .Where(obj => obj.Id == WorldIds.Wizard
+                          || obj.Id == WorldIds.PlayerStart
+                          || obj.Id.Value >= WorldIds.Foyer.Value);
 }

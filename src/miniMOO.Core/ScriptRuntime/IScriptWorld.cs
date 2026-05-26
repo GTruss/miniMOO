@@ -10,6 +10,8 @@ public interface IScriptWorld {
     Task NotifyAsync(ObjectId playerId, IReadOnlyList<MooValue> values);
     Task<MooValue> ReadInputAsync(ObjectId playerId);
     Task EvalCommandAsync(ObjectId playerId, string command, IReadOnlyList<string>? inputLines = null);
+    Task<MooValue> CheckpointAsync();
+    Task<MooValue> ShutdownAsync(string message);
     Task<ScriptResult> InvokeVerbAsync(ScriptContext callerContext, ObjectId thisId, 
         string verb, IReadOnlyList<MooValue> args, ObjectId? searchFromId = null);
 

@@ -7,8 +7,8 @@ location:
 flags:
   - readable
 aliases: []
-created: 2026-05-25T00:00
-updated: 2026-05-25T13:05
+updated: 2026-05-25T17:20
+created: 2026-05-25T13:05
 ---
 
 # The Library
@@ -16,17 +16,24 @@ updated: 2026-05-25T13:05
 ```yaml
 name: description
 type: string
-value: Tall shelves line the walls, filled with dusty volumes. The foyer lies to the west.
-```
-
-```yaml
-name: exits
-type: list
-value: ["#105"]
+value: "Tall shelves line the walls, filled with dusty volumes. The foyer lies to the west."
+flags:
+  - readable
 ```
 
 ```yaml
 name: entrances
 type: list
 value: ["#104"]
+flags:
+  - readable
 ```
+
+```yaml
+name: exits
+type: list
+value: ["#105"]
+flags:
+  - readable
+```
+

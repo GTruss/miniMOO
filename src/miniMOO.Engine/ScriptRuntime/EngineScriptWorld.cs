@@ -14,6 +14,8 @@ public sealed class EngineScriptWorld : IScriptWorld {
     private readonly IScriptRuntime _scriptRuntime;
     private Func<ObjectId, string, Task>? _evalCommand;
     private Func<ObjectId, Task<string?>>? _readInput;
+    private Func<Task<MooValue>>? _checkpoint;
+    private Func<string, Task<MooValue>>? _shutdown;
     private readonly Dictionary<ObjectId, Stack<Queue<string>>> _scriptedInput = new();
 
     public EngineScriptWorld(IObjectRepository objects, IObjectResolver resolver, OutputService output,
@@ -30,6 +32,12 @@ public sealed class EngineScriptWorld : IScriptWorld {
 
     public void SetInputReader(Func<ObjectId, Task<string?>> readInput)
         => _readInput = readInput;
+
+    public void SetCheckpoint(Func<Task<MooValue>> checkpoint)
+        => _checkpoint = checkpoint;
+
+    public void SetShutdown(Func<string, Task<MooValue>> shutdown)
+        => _shutdown = shutdown;
 
     public MooObject? Get(ObjectId id)
         => _objects.Get(id);
@@ -122,6 +130,23 @@ public sealed class EngineScriptWorld : IScriptWorld {
             if (inputStack.Count == 0)
                 _scriptedInput.Remove(playerId);
         }
+    }
+
+    public Task<MooValue> CheckpointAsync() {
+        if (_checkpoint is null)
+            throw new MooScriptException(MooErrorCode.E_INVARG, "checkpoint() is not available.");
+
+        return _checkpoint();
+    }
+
+    public async Task<MooValue> ShutdownAsync(string message) {
+        if (_shutdown is null)
+            throw new MooScriptException(MooErrorCode.E_INVARG, "shutdown() is not available.");
+
+        if (_checkpoint is not null)
+            await _checkpoint();
+
+        return await _shutdown(message);
     }
 
     public async Task<ScriptResult> InvokeVerbAsync(ScriptContext callerContext, ObjectId thisId,
