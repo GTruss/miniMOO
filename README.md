@@ -1,2 +1,2 @@
 # miniMOO
-A mini C# MOO based on LambdaMOO? We'll see!
+A C# mini MOO based on LambdaMOO? We'll see!
