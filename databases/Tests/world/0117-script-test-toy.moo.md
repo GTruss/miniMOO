@@ -9,7 +9,7 @@ flags:
 aliases:
   - "Script Test Toy"
   - "sttoy"
-updated: 2026-06-02T18:52:55-05:00
+updated: 2026-06-02T19:33:36-05:00
 ---
 
 # Script Test Toy

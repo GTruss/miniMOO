@@ -8,7 +8,7 @@ flags:
   - readable
 aliases:
   - "test-alias"
-updated: 2026-06-02T18:52:55-05:00
+updated: 2026-06-02T19:33:36-05:00
 ---
 
 # test object

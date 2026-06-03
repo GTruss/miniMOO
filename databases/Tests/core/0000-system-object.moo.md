@@ -7,7 +7,7 @@ location:
 flags:
   - readable
 aliases: []
-updated: 2026-06-02T18:52:55-05:00
+updated: 2026-06-02T19:33:36-05:00
 ---
 
 # The System Object
@@ -287,7 +287,7 @@ flags:
 ```yaml
 name: shutdown_time
 type: integer
-value: 1780444374
+value: 1780446815
 flags:
   - readable
 ```

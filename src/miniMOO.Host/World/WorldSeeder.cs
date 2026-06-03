@@ -4,69 +4,1570 @@ using miniMOO.Core.Things;
 namespace miniMOO.Host.World;
 
 /// <summary>
-/// Builds the initial miniMOO world: prototype classes + a small navigable area.
-///
-/// Object ID allocation:
-///   #0  - System      - reserved
-///   #1  - $root       - base ancestor of all objects
-///   #2  - Wizard      - the default player (parent: $wiz)
-///   #3  - $room       - generic room prototype (parent: $root)
-///   #4  - $builder    - generic builder prototype (parent: $player)
-///   #5  - $thing      - generic pick-up-able object prototype (parent: $root)
-///   #6  - $player     - generic player prototype (parent: $root)
-///   #7  - $exit       - generic exit prototype (parent: $root)
-///   #8  - $container  - generic container prototype (parent: $thing)
-///   #9  - $note       - generic note prototype (parent: $thing)
-///   #20 - $string_utils   - string manipulation utility object
-///   #21 - $building_utils - building utility object (make_exit, set_names, parse_names)
-///   #41 - $gender_utils   - gender/pronoun/conjugation utility object
-///   #52 - $object_utils   - object introspection utility object
-///   #57 - $wiz        - generic wizard prototype (parent: $prog)
-///   #58 - $prog       - generic programmer prototype (parent: $builder)
-///   #10  - The Void    - $player_start, where new players appear
-///   #101 - The Foyer   - first real room
-///   #102 - The Library - second room
-///   #103 - a gnarled staff (in Wizard's inventory)
-///   #104 - exit: Foyer -> Library (east)
-///   #105 - exit: Library -> Foyer (west)
-///   #106 - a worn book (thing in the Library)
+/// Builds the initial miniMOO database from the file-backed core and world directories,
+/// then layers on the in-memory test verbs used by the scripted test suite.
 /// </summary>
 public static partial class WorldSeeder {
-    public static readonly ObjectId RootId = WorldIds.Root;
-    public static readonly ObjectId WizardId = WorldIds.Wizard;
-    public static readonly ObjectId GenRoomId = WorldIds.Room;
-    public static readonly ObjectId GenBuilderId = WorldIds.Builder;
-    public static readonly ObjectId GenThingId = WorldIds.Thing;
-    public static readonly ObjectId GenPlayerId = WorldIds.Player;
-    public static readonly ObjectId GenExitId = WorldIds.Exit;
-    public static readonly ObjectId GenContainerId = WorldIds.Container;
-    public static readonly ObjectId GenNoteId = WorldIds.Note;
-    public static readonly ObjectId PlayerStartId = WorldIds.PlayerStart;
-    public static readonly ObjectId GenStringUtilsId   = WorldIds.StringUtils;
-    public static readonly ObjectId GenBuildingUtilsId = WorldIds.BuildingUtils;
-    public static readonly ObjectId GenGenderUtilsId = WorldIds.GenderUtils;
-    public static readonly ObjectId GenObjectUtilsId   = WorldIds.ObjectUtils;
-    public static readonly ObjectId GenWizId = WorldIds.Wiz;
-    public static readonly ObjectId GenProgId = WorldIds.Prog;
-    public static readonly ObjectId GenMailPlayerId = WorldIds.MailPlayer;
-    public static readonly ObjectId GenFrandsPlayerClassId = WorldIds.FrandsPlayerClass;
-    public static readonly ObjectId GenBuilderOptionsId = WorldIds.BuilderOptions;
-
-    public static readonly ObjectId FoyerId = WorldIds.Foyer;
-    public static readonly ObjectId LibraryId = WorldIds.Library;
+    public static readonly ObjectId WizardId = new(2);
+    private static readonly ObjectId WizardPrototypeId = new(57);
 
     public static IObjectRepository Seed(string? dataRootPath = null) {
         SetWorldDataRoot(dataRootPath);
 
         var repo = new InMemoryObjectRepository();
 
-        AddSystemObject(repo);
-        AddPrototypes(repo);
-        AddUtilityObjects(repo);
-        AddStarterWorld(repo);
-        AddStarterPlayer(repo);
+        AddCoreObjects(repo);
+        AddWorldObjects(repo);
         AddUnitTests(repo);
 
         return repo;
     }
+
+    private static void AddCoreObjects(InMemoryObjectRepository repo)
+        => AddFileObjects(repo, "core");
+
+    private static void AddWorldObjects(InMemoryObjectRepository repo)
+        => AddFileObjects(repo, "world");
+
+    private static void AddUnitTests(InMemoryObjectRepository repo) {
+        var wiz = repo.Get(WizardPrototypeId);
+        if (wiz is null)
+            return;
+
+        wiz.Properties["_test_clear_property"] = new MooProperty {
+            Name = "_test_clear_property",
+            OwnerId = ObjectId.System,
+            Value = MooValue.ClearValue
+        };
+
+        wiz.Verbs.Add(ScriptVerb(["@parsefail1"], """
+            player:tell("before parse failure");
+            value = "unterminated;
+            player:tell("after parse failure");
+        """));
+
+        wiz.Verbs.Add(ScriptVerb(["@parsefail2"], """
+            player:tell("before parse failure");
+            value = 1 + ;
+            player:tell("after parse failure");
+        """));
+
+        wiz.Verbs.Add(ScriptVerb(["_test_destructure"], """
+            {a, b} = args;
+            return (a == "left" && b == "right");
+        """));
+
+        wiz.Verbs.Add(ScriptVerb(["_test_dynamic_verb_target"], """
+            return tostr("dynamic:", args[1]);
+        """));
+
+        wiz.Verbs.Add(ScriptVerb(["@test-builtins"], """
+            player:tell("Running miniMOO tests...");
+
+            passed = 0;
+            failed = 0;
+
+            test_obj = create($thing);
+            prop = "dynamic_test";
+            test_obj.(prop) = 42;
+
+            root_tell = verb_code($root, "tell");
+            if (root_tell[1] == "this:notify(tostr(@args));")
+              player:tell("PASS: file-backed $root:tell");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: file-backed $root:tell");
+              failed = failed + 1;
+            endif
+
+            if (test_obj.(prop) == 42)
+              player:tell("PASS: dynamic property access");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: dynamic property access");
+              failed = failed + 1;
+            endif
+
+            result = index("hello", "ll");
+            if (result == 3)
+              player:tell("PASS: index()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: index() -- expected 3 got ", result);
+              failed = failed + 1;
+            endif
+
+            result = substr("hello", 2, 3);
+            if (result == "ell")
+              player:tell("PASS: substr()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: substr() -- expected ell got ", result);
+              failed = failed + 1;
+            endif
+
+            if ("abcdef"[2..4] == "bcd")
+              player:tell("PASS: string slicing");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: string slicing");
+              failed = failed + 1;
+            endif
+
+            slice = {10, 20, 30, 40}[2..3];
+            if (length(slice) == 2 && slice[1] == 20 && slice[2] == 30)
+              player:tell("PASS: list slicing");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: list slicing");
+              failed = failed + 1;
+            endif
+
+            if ("abc"[1..0] == "")
+              player:tell("PASS: empty string slice");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: empty string slice");
+              failed = failed + 1;
+            endif
+
+            if ("player"[8..6] == "")
+              player:tell("PASS: past-end empty string slice");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: past-end empty string slice");
+              failed = failed + 1;
+            endif
+
+            if (length({"a", "b", "c"}[5..3]) == 0)
+              player:tell("PASS: past-end empty list slice");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: past-end empty list slice");
+              failed = failed + 1;
+            endif
+
+            if ({"a", "b", "c"}[$] == "c")
+              player:tell("PASS: list $ index");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: list $ index");
+              failed = failed + 1;
+            endif
+
+            slice = {"a", "b", "c", "d"}[2..$];
+            if (length(slice) == 3 && slice[1] == "b" && slice[3] == "d")
+              player:tell("PASS: list $ slice");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: list $ slice");
+              failed = failed + 1;
+            endif
+
+            if ("hello"[$] == "o" && "hello"[2..$ - 1] == "ell")
+              player:tell("PASS: string $ index/slice");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: string $ index/slice");
+              failed = failed + 1;
+            endif
+
+            word = "staff";
+            word[1..1] = "";
+            if (word == "taff")
+              player:tell("PASS: string slice assignment delete");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: string slice assignment delete");
+              failed = failed + 1;
+            endif
+
+            word = "stff";
+            word[3..2] = "a";
+            if (word == "staff")
+              player:tell("PASS: string slice assignment insert");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: string slice assignment insert");
+              failed = failed + 1;
+            endif
+
+            items = {"a", "x", "d"};
+            items[2..2] = {"b", "c"};
+            if (length(items) == 4 && items[2] == "b" && items[3] == "c")
+              player:tell("PASS: list slice assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: list slice assignment");
+              failed = failed + 1;
+            endif
+
+            items = {"a", "b", "c"};
+            items[2] = "B";
+            if (items[1] == "a" && items[2] == "B" && items[3] == "c")
+              player:tell("PASS: list indexed assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: list indexed assignment");
+              failed = failed + 1;
+            endif
+
+            word = "cat";
+            word[2] = "u";
+            if (word == "cut")
+              player:tell("PASS: string indexed assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: string indexed assignment");
+              failed = failed + 1;
+            endif
+
+            test_obj = create($thing);
+            test_obj.description = {"old", "value"};
+            test_obj.description[2] = "new";
+            if (test_obj.description[1] == "old" && test_obj.description[2] == "new")
+              player:tell("PASS: property indexed assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: property indexed assignment");
+              failed = failed + 1;
+            endif
+
+            result = "b" in {"a", "b", "c"};
+            if (result == 2)
+              player:tell("PASS: in operator found");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: in operator found -- expected 2 got ", result);
+              failed = failed + 1;
+            endif
+
+            result = "z" in {"a", "b", "c"};
+            if (result == 0)
+              player:tell("PASS: in operator not found");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: in operator not found -- expected 0 got ", result);
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              result = "z" in "not a list";
+            except e (E_TYPE)
+              caught = e;
+            endtry
+            if (caught == E_TYPE)
+              player:tell("PASS: in operator E_TYPE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: in operator E_TYPE");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              result = {"a"}[2];
+            except e (E_RANGE)
+              caught = e;
+            endtry
+            if (caught == E_RANGE)
+              player:tell("PASS: list index E_RANGE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: list index E_RANGE");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              result = length(1);
+            except e (E_TYPE)
+              caught = e;
+            endtry
+            if (caught == E_TYPE)
+              player:tell("PASS: length() E_TYPE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: length() E_TYPE");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              result = 1 / 0;
+            except e (E_DIV)
+              caught = e;
+            endtry
+            if (caught == E_DIV)
+              player:tell("PASS: division E_DIV");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: division E_DIV");
+              failed = failed + 1;
+            endif
+
+            result = setadd({"a"}, "b");
+            if (length(result) == 2 && result[2] == "b")
+              player:tell("PASS: setadd()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: setadd()");
+              failed = failed + 1;
+            endif
+
+            result = setadd({"a"}, "a");
+            if (length(result) == 1)
+              player:tell("PASS: setadd() duplicate");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: setadd() duplicate");
+              failed = failed + 1;
+            endif
+
+            removed = setremove({1, 2, 3}, 2);
+            if (length(removed) == 2 && removed[1] == 1 && removed[2] == 3)
+              player:tell("PASS: setremove()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: setremove()");
+              failed = failed + 1;
+            endif
+
+            removed = setremove({1, 2, 3}, 4);
+            if (length(removed) == 3 && removed[1] == 1 && removed[2] == 2 && removed[3] == 3)
+              player:tell("PASS: setremove() missing value");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: setremove() missing value");
+              failed = failed + 1;
+            endif
+
+            removed = setremove({1, 2, 3, 2}, 2);
+            if (length(removed) == 3 && removed[1] == 1 && removed[2] == 3 && removed[3] == 2)
+              player:tell("PASS: setremove() removes first match");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: setremove() removes first match");
+              failed = failed + 1;
+            endif
+
+            m = rmatch("foobar", "o*b");
+            if (m[1] == 4 && m[2] == 4)
+              player:tell("PASS: rmatch()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: rmatch()");
+              failed = failed + 1;
+            endif
+
+            m = match("foobar", "o+b");
+            if (m[1] == 2 && m[2] == 4)
+              player:tell("PASS: match()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: match()");
+              failed = failed + 1;
+            endif
+
+            m = match("foobar", "z+");
+            if (length(m) == 0)
+              player:tell("PASS: match() not found");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: match() not found");
+              failed = failed + 1;
+            endif
+
+            result = listappend({"a"}, "a");
+            if (length(result) == 2 && result[2] == "a")
+              player:tell("PASS: listappend()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: listappend()");
+              failed = failed + 1;
+            endif
+
+            deleted = listdelete({"north", "east", "south"}, 2);
+            if (length(deleted) == 2 && deleted[1] == "north" && deleted[2] == "south")
+              player:tell("PASS: listdelete()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: listdelete()");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              listdelete({"north"}, 2);
+            except e (E_RANGE)
+              caught = e;
+            endtry
+            if (caught == E_RANGE)
+              player:tell("PASS: listdelete() range error");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: listdelete() range error");
+              failed = failed + 1;
+            endif
+
+            result = "first" || "second";
+            if (result == "first")
+              player:tell("PASS: || preserves truthy value");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: || preserves truthy value -- got ", result);
+              failed = failed + 1;
+            endif
+
+            result = "" || "fallback";
+            if (result == "fallback")
+              player:tell("PASS: || returns fallback value");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: || returns fallback value -- got ", result);
+              failed = failed + 1;
+            endif
+
+            result = 0 && "right";
+            if (result == 0)
+              player:tell("PASS: && preserves falsey value");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: && preserves falsey value -- got ", result);
+              failed = failed + 1;
+            endif
+
+            result = 1 && "right";
+            if (result == "right")
+              player:tell("PASS: && returns right value");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: && returns right value -- got ", result);
+              failed = failed + 1;
+            endif
+
+            if (length("hello") == 5)
+              player:tell("PASS: length() string");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: length() string");
+              failed = failed + 1;
+            endif
+
+            if (length({1, 2, 3}) == 3)
+              player:tell("PASS: length() list");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: length() list");
+              failed = failed + 1;
+            endif
+
+            if ("abc"[2] == "b")
+              player:tell("PASS: string indexing");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: string indexing");
+              failed = failed + 1;
+            endif
+
+            if ({10, 20, 30}[3] == 30)
+              player:tell("PASS: list indexing");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: list indexing");
+              failed = failed + 1;
+            endif
+
+            sum = 0;
+            for i in [1..4]
+              sum = sum + i;
+            endfor
+            if (sum == 10)
+              player:tell("PASS: numeric range for");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: numeric range for -- expected 10 got ", sum);
+              failed = failed + 1;
+            endif
+
+            sum = 0;
+            for x in ({2, 4, 6})
+              sum = sum + x;
+            endfor
+            if (sum == 12)
+              player:tell("PASS: list for");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: list for -- expected 12 got ", sum);
+              failed = failed + 1;
+            endif
+
+            i = 0;
+            while (i < 3)
+              i = i + 1;
+            endwhile
+            if (i == 3)
+              player:tell("PASS: while loop");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: while loop -- expected 3 got ", i);
+              failed = failed + 1;
+            endif
+
+            result = this:_test_destructure("left", "right");
+            if (result)
+              player:tell("PASS: destructuring assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: destructuring assignment");
+              failed = failed + 1;
+            endif
+
+            dynamic_verb = "_test_dynamic_verb_target";
+            result = this:(dynamic_verb)("call");
+            if (result == "dynamic:call")
+              player:tell("PASS: dynamic verb call");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: dynamic verb call");
+              failed = failed + 1;
+            endif
+
+            {required, ?optional = "fallback"} = {"actual"};
+            if (required == "actual" && optional == "fallback")
+              player:tell("PASS: optional destructuring default");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: optional destructuring default");
+              failed = failed + 1;
+            endif
+
+            {first, @rest} = {"a", "b", "c"};
+            if (first == "a" && length(rest) == 2 && rest[1] == "b" && rest[2] == "c")
+              player:tell("PASS: rest destructuring assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: rest destructuring assignment");
+              failed = failed + 1;
+            endif
+
+            {only, @empty_rest} = {"a"};
+            if (only == "a" && length(empty_rest) == 0)
+              player:tell("PASS: empty rest destructuring assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: empty rest destructuring assignment");
+              failed = failed + 1;
+            endif
+
+            if ("staff" in player.contents[1].aliases)
+              player:tell("PASS: aliases builtin property");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: aliases builtin property");
+              failed = failed + 1;
+            endif
+
+            if (!valid($nothing) && !valid($failed_match) && !valid($ambiguous_match))
+              player:tell("PASS: valid() special match objects");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: valid() special match objects");
+              failed = failed + 1;
+            endif
+
+            if (valid(player))
+              player:tell("PASS: valid() player");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: valid() player");
+              failed = failed + 1;
+            endif
+
+            info = verb_info($root, "tell");
+            if (info[1] == #0)
+              player:tell("PASS: verb_info() found");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: verb_info() found");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              verb_info($root, "definitely_not_a_verb");
+            except e (E_VERBNF)
+              caught = e;
+            endtry
+            if (caught == E_VERBNF)
+              player:tell("PASS: try/except specific code");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: try/except specific code");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              verb_info($root, "definitely_not_a_verb");
+            except e (ANY)
+              caught = e;
+            endtry
+            if (caught == E_VERBNF)
+              player:tell("PASS: try/except ANY");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: try/except ANY");
+              failed = failed + 1;
+            endif
+
+            result = `verb_info($root, "definitely_not_a_verb") ! E_VERBNF => "caught"';
+            if (result == "caught")
+              player:tell("PASS: backtick catch");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: backtick catch");
+              failed = failed + 1;
+            endif
+
+            code = verb_code($wiz, "_test_destructure");
+            found = 0;
+
+            if (typeof(code) == LIST)
+              for line in (code)
+                if (index(line, "{a, b} = args"))
+                  found = 1;
+                endif
+              endfor
+            endif
+
+            if (found)
+              player:tell("PASS: verb_code() found");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: verb_code() found");
+              failed = failed + 1;
+            endif
+
+            vlist = verbs($wiz);
+            if ("_test_destructure" in vlist)
+              player:tell("PASS: verbs()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: verbs()");
+              failed = failed + 1;
+            endif
+
+            avlist = all_verbs(player);
+            if ("tell" in avlist && !("tell" in verbs(player)))
+              player:tell("PASS: all_verbs()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: all_verbs()");
+              failed = failed + 1;
+            endif
+
+            vnum = "_test_destructure" in vlist;
+            info = verb_info($wiz, vnum);
+            argspec = verb_args($wiz, vnum);
+            code = verb_code($wiz, vnum);
+            if (info[3] == "_test_destructure" && argspec[1] == "none" && argspec[2] == "none" && argspec[3] == "none" && typeof(code) == LIST)
+              player:tell("PASS: numeric verb_info()/verb_args()/verb_code()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: numeric verb_info()/verb_args()/verb_code()");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              verb_code(this, "definitely_not_a_verb");
+            except (E_VERBNF)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: verb_code() not found");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: verb_code() not found");
+              failed = failed + 1;
+            endif
+
+            props = properties(#0);
+            if ("root" in props && "string_utils" in props)
+              player:tell("PASS: properties()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: properties()");
+              failed = failed + 1;
+            endif
+
+            aprops = all_properties(player);
+            if ("description" in aprops && "r" in aprops && !("r" in properties(player)))
+              player:tell("PASS: all_properties()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: all_properties()");
+              failed = failed + 1;
+            endif
+
+            pinfo = property_info($root, "description");
+            if (length(pinfo) == 2 && pinfo[1] == #0 && index(pinfo[2], "r"))
+              player:tell("PASS: property_info() found");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: property_info() found");
+              failed = failed + 1;
+            endif
+
+            caught = `property_info($root, "definitely_not_a_property") ! E_PROPNF => "caught"';
+            if (caught == "caught")
+              player:tell("PASS: property_info() not found");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: property_info() not found");
+              failed = failed + 1;
+            endif
+
+            if (is_clear_property($wiz, "_test_clear_property") && !is_clear_property($root, "description"))
+              player:tell("PASS: is_clear_property()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: is_clear_property()");
+              failed = failed + 1;
+            endif
+
+            this._test_fork_immediate = 0;
+            parent_task = task_id();
+            fork child_task (0)
+              this._test_fork_immediate = child_task != parent_task && task_id() == child_task;
+            endfork
+            if (child_task > parent_task)
+              player:tell("PASS: fork task id assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: fork task id assignment");
+              failed = failed + 1;
+            endif
+
+            this._test_fork_cancelled = 0;
+            fork queued_task (60)
+              this._test_fork_cancelled = 1;
+            endfork
+            found_task = 0;
+            for t in (queued_tasks())
+              if (t[1] == queued_task && t[5] == player && t[7] == verb)
+                found_task = 1;
+              endif
+            endfor
+            kill_task(queued_task);
+            if (found_task && !this._test_fork_cancelled)
+              player:tell("PASS: queued_tasks()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: queued_tasks()");
+              failed = failed + 1;
+            endif
+
+            this._test_fork_cancelled = 0;
+            fork doomed_task (1)
+              this._test_fork_cancelled = 1;
+            endfork
+            kill_task(doomed_task);
+            if (!this._test_fork_cancelled)
+              player:tell("PASS: kill_task() queued fork");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: kill_task() queued fork");
+              failed = failed + 1;
+            endif
+
+            changed = listset({"a", "b", "c"}, "B", 2);
+            if (changed[1] == "a" && changed[2] == "B" && changed[3] == "c")
+              player:tell("PASS: listset()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: listset()");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              listset({"a"}, "x", 2);
+            except (E_RANGE)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: listset() E_RANGE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: listset() E_RANGE");
+              failed = failed + 1;
+            endif
+
+            if (index("Alpha", "a") == 1 && index("Alpha", "a", 1) == 5 && rindex("banAna", "A") == 6 && rindex("banAna", "A", 1) == 4)
+              player:tell("PASS: index()/rindex() case handling");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: index()/rindex() case handling");
+              failed = failed + 1;
+            endif
+
+            if (strsub("foo Foo", "foo", "bar") == "bar bar" && strsub("foo Foo", "foo", "bar", 1) == "bar Foo")
+              player:tell("PASS: strsub()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: strsub()");
+              failed = failed + 1;
+            endif
+
+            if (parent(player) == $wiz)
+              player:tell("PASS: parent()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: parent()");
+              failed = failed + 1;
+            endif
+
+            kids = children($root);
+            if ($room in kids)
+              player:tell("PASS: children()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: children()");
+              failed = failed + 1;
+            endif
+
+            if (typeof(1) == 0 && typeof(player) == 1 && typeof("x") == 2 && typeof({1}) == 4)
+              player:tell("PASS: typeof()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: typeof()");
+              failed = failed + 1;
+            endif
+
+            if (typeof(1) == INT && typeof(player) == OBJ && typeof("x") == STR && typeof({1}) == LIST)
+              player:tell("PASS: type constants");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: type constants");
+              failed = failed + 1;
+            endif
+
+            if (tostr("obj=", player) == "obj=#2")
+              player:tell("PASS: tostr()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: tostr()");
+              failed = failed + 1;
+            endif
+
+            if (toint(34) == 34 && toint(-34) == -34 && toint(player) == 2)
+              player:tell("PASS: toint() scalar conversions");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toint() scalar conversions");
+              failed = failed + 1;
+            endif
+
+            if (toint("34") == 34 && toint("34.7") == 34 && toint(" - 34  ") == -34 && toint("wat") == 0)
+              player:tell("PASS: toint() string conversions");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toint() string conversions");
+              failed = failed + 1;
+            endif
+
+            if (toint(E_TYPE) == 1 && tonum(E_PERM) == 3)
+              player:tell("PASS: toint() error conversion");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toint() error conversion");
+              failed = failed + 1;
+            endif
+
+            if ($string_utils:capitalize("hello") == "Hello" && $string_utils:capitalize("Hello") == "Hello")
+              player:tell("PASS: $string_utils:capitalize()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $string_utils:capitalize()");
+              failed = failed + 1;
+            endif
+
+            if ($gender_utils:get_conj("is/are", player) == "is" && $gender_utils:get_conj("says", player) == "says")
+              player:tell("PASS: $gender_utils:get_conj() singular");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $gender_utils:get_conj() singular");
+              failed = failed + 1;
+            endif
+
+            gender_obj = create($thing);
+            gender_obj.gender = "plural";
+            if ($gender_utils:get_conj("is/are", gender_obj) == "are" && $gender_utils:get_conj("says", gender_obj) == "say")
+              player:tell("PASS: $gender_utils:get_conj() plural");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $gender_utils:get_conj() plural");
+              failed = failed + 1;
+            endif
+
+            if ($gender_utils:get_conj("Runs", player) == "Runs" && $gender_utils:get_conj("Runs", gender_obj) == "Run")
+              player:tell("PASS: $gender_utils:get_conj() capitalization");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $gender_utils:get_conj() capitalization");
+              failed = failed + 1;
+            endif
+
+            if (toobj(34) == #34 && toobj(player) == player && toobj(E_TYPE) == #1)
+              player:tell("PASS: toobj() scalar conversions");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toobj() scalar conversions");
+              failed = failed + 1;
+            endif
+
+            if (typeof(1) == INT && typeof(player) == OBJ && typeof("x") == STR && typeof(E_PERM) == ERR && typeof({1}) == LIST)
+              player:tell("PASS: type constants");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: type constants");
+              failed = failed + 1;
+            endif
+
+            if (toobj("34") == #34 && toobj("#34") == #34 && toobj("#34.7") == #34 && toobj("wat") == #0)
+              player:tell("PASS: toobj() string conversions");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toobj() string conversions");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              toobj({});
+            except (E_TYPE)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: toobj() E_TYPE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toobj() E_TYPE");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              toint({});
+            except (E_TYPE)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: toint() E_TYPE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toint() E_TYPE");
+              failed = failed + 1;
+            endif
+
+            literal = toliteral({1, "two", player, E_PERM});
+            if (literal == "{1, \"two\", #2, E_PERM}")
+              player:tell("PASS: toliteral()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toliteral() -- got ", literal);
+              failed = failed + 1;
+            endif
+
+            if (typeof(E_PERM) == 3 && toliteral(E_PERM) == "E_PERM")
+              player:tell("PASS: error values");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: error values");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              toliteral();
+            except (E_ARGS)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: toliteral() E_ARGS");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: toliteral() E_ARGS");
+              failed = failed + 1;
+            endif
+
+            result = eval("return 2 + 2;");
+            if (result == 4)
+              player:tell("PASS: eval() expression");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval() expression -- expected 4 got ", result);
+              failed = failed + 1;
+            endif
+
+            result = eval("x = 3; y = 4; return x + y;");
+            if (result == 7)
+              player:tell("PASS: eval() statements");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval() statements -- expected 7 got ", result);
+              failed = failed + 1;
+            endif
+
+            result = eval("return this:_test_destructure(\"left\", \"right\");");
+            if (result)
+              player:tell("PASS: eval() verb call");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval() verb call");
+              failed = failed + 1;
+            endif
+
+            test_obj = create($thing);
+            set_name(test_obj, "test object");
+            add_alias(test_obj, "test-alias");
+            ping_index = add_verb(test_obj, "ping", "return \"pong\";");
+
+            if (test_obj.name == "test object")
+              player:tell("PASS: set_name()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: set_name()");
+              failed = failed + 1;
+            endif
+
+            if ("test-alias" in test_obj.aliases)
+              player:tell("PASS: add_alias()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: add_alias()");
+              failed = failed + 1;
+            endif
+
+            if (ping_index == length(verbs(test_obj)) && test_obj:ping() == "pong")
+              player:tell("PASS: add_verb()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: add_verb()");
+              failed = failed + 1;
+            endif
+
+            add_property(test_obj, "added_prop", "added value", {player, "rw"});
+            pinfo = property_info(test_obj, "added_prop");
+            if (test_obj.added_prop == "added value" && pinfo[1] == player && pinfo[2] == "rw")
+              player:tell("PASS: add_property()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: add_property()");
+              failed = failed + 1;
+            endif
+
+            lambda_index = add_verb(test_obj, {player, "rx", "lambda_ping lp"}, {"none", "none", "none"});
+            set_verb_code(test_obj, "lambda_ping", {"return \"lambda pong\";"});
+            vinfo = verb_info(test_obj, "lambda_ping");
+            vargs = verb_args(test_obj, "lambda_ping");
+            if (lambda_index == length(verbs(test_obj)) && test_obj:lp() == "lambda pong" && vinfo[1] == player && vinfo[2] == "rx" && vinfo[3] == "lambda_ping lp" && vargs == {"none", "none", "none"})
+              player:tell("PASS: add_verb() Lambda form");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: add_verb() Lambda form");
+              failed = failed + 1;
+            endif
+
+            set_verb_code(test_obj, "ping", {"return \"changed\";"});
+            if (test_obj:ping() == "changed" && verb_code(test_obj, "ping")[1] == "return \"changed\";")
+              player:tell("PASS: set_verb_code()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: set_verb_code()");
+              failed = failed + 1;
+            endif
+
+            move(test_obj, player);
+
+            if (test_obj.location == player)
+              player:tell("PASS: move() changes location");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: move() changes location");
+              failed = failed + 1;
+            endif
+
+            move(test_obj, here);
+
+            if (test_obj.location == here && test_obj in here.contents)
+              player:tell("PASS: move() updates contents view");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: move() updates contents view");
+              failed = failed + 1;
+            endif
+
+            try
+              move(here, test_obj);
+              player:tell("FAIL: move() prevents recursive containment");
+              failed = failed + 1;
+            except (E_RECMOVE)
+              player:tell("PASS: move() prevents recursive containment");
+              passed = passed + 1;
+            endtry
+
+            move(test_obj, $nothing);
+            if (test_obj.location == $nothing)
+              player:tell("PASS: move() to $nothing");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: move() to $nothing");
+              failed = failed + 1;
+            endif
+
+            if (is_player(player) && !is_player($room))
+              player:tell("PASS: is_player()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: is_player()");
+              failed = failed + 1;
+            endif
+
+            ternary = 1 ? "yes" | "no";
+            if (ternary == "yes")
+              player:tell("PASS: ternary true branch");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: ternary true branch");
+              failed = failed + 1;
+            endif
+
+            ternary = 0 ? "yes" | "no";
+            if (ternary == "no")
+              player:tell("PASS: ternary false branch");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: ternary false branch");
+              failed = failed + 1;
+            endif
+
+            if (2.5 == 2.5 && 2 == 2.0)
+              player:tell("PASS: float equality");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: float equality");
+              failed = failed + 1;
+            endif
+
+            if (abs(-5) == 5 && abs(5) == 5)
+              player:tell("PASS: abs() integer");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: abs() integer");
+              failed = failed + 1;
+            endif
+
+            if (abs(-2.5) == 2.5 && abs(2.5) == 2.5)
+              player:tell("PASS: abs() float");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: abs() float");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              abs("nope");
+            except (E_TYPE)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: abs() E_TYPE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: abs() E_TYPE");
+              failed = failed + 1;
+            endif
+
+            if (min(3, -1, 5, 2) == -1 && max(3, -1, 5, 2) == 5)
+              player:tell("PASS: min()/max() integers");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: min()/max() integers");
+              failed = failed + 1;
+            endif
+
+            if (min(3, -1.5, 5) == -1.5 && max(3, -1.5, 5.25) == 5.25)
+              player:tell("PASS: min()/max() floats");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: min()/max() floats");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              min("nope", 1);
+            except (E_TYPE)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: min()/max() E_TYPE");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: min()/max() E_TYPE");
+              failed = failed + 1;
+            endif
+
+            r = random(5);
+            if (r >= 1 && r <= 5)
+              player:tell("PASS: random() range");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: random() range");
+              failed = failed + 1;
+            endif
+
+            r = random();
+            if (typeof(r) == INT && r >= 0)
+              player:tell("PASS: random() no args");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: random() no args");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              random(0);
+            except (E_INVARG)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: random() E_INVARG");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: random() E_INVARG");
+              failed = failed + 1;
+            endif
+
+            seq = $seq_utils:from_string("10...12,15");
+            if (length(seq) == 4 && seq[1] == 10 && seq[2] == 13 && seq[3] == 15 && seq[4] == 16)
+              player:tell("PASS: $seq_utils:from_string()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $seq_utils:from_string() -- got ", seq);
+              failed = failed + 1;
+            endif
+
+            seq = $seq_utils:union({1, 4}, {3, 6}, {10, 11});
+            if (length(seq) == 4 && seq[1] == 1 && seq[2] == 6 && seq[3] == 10 && seq[4] == 11)
+              player:tell("PASS: $seq_utils:union()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $seq_utils:union() -- got ", seq);
+              failed = failed + 1;
+            endif
+
+            seq = $seq_utils:intersection({1, 6}, {3, 8}, {4, 5});
+            if (length(seq) == 2 && seq[1] == 4 && seq[2] == 5)
+              player:tell("PASS: $seq_utils:intersection()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $seq_utils:intersection() -- got ", seq);
+              failed = failed + 1;
+            endif
+
+            if ($seq_utils:from_string("nope") == E_INVARG)
+              player:tell("PASS: $seq_utils:from_string() E_INVARG");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: $seq_utils:from_string() E_INVARG");
+              failed = failed + 1;
+            endif
+
+            if (caller_perms() == player)
+              player:tell("PASS: caller_perms()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: caller_perms()");
+              failed = failed + 1;
+            endif
+
+            now = time();
+            if (typeof(now) == INT && now > 0)
+              player:tell("PASS: time()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: time()");
+              failed = failed + 1;
+            endif
+
+            caught = 0;
+            try
+              raise(E_PERM, "forced permission error");
+            except (E_PERM)
+              caught = 1;
+            endtry
+            if (caught)
+              player:tell("PASS: raise()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: raise()");
+              failed = failed + 1;
+            endif
+
+            player:tell("---");
+            player:tell(passed, " builtin tests passed, ", failed, " failed.");
+        """));
+
+        wiz.Verbs.Add(ScriptVerb(["@test-scripts"], """
+            player:tell("Running miniMOO script command tests...");
+
+            passed = 0;
+            failed = 0;
+
+            start = player.location;
+
+            before = length(player.contents);
+            eval_command("@create $thing named Script Test Thing,stthing");
+            if (length(player.contents) == before + 1)
+              player:tell("PASS: eval_command() @create");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @create");
+              failed = failed + 1;
+            endif
+
+            eval_command("@dig testnorth,tn|testsouth,ts to Script Test Room");
+            exit = start:match_exit("tn");
+            if (valid(exit) && exit.dest.name == "Script Test Room")
+              player:tell("PASS: eval_command() @dig creates exit and room");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @dig creates exit and room");
+              failed = failed + 1;
+            endif
+
+            eval_command("tn");
+            if (player.location == exit.dest)
+              player:tell("PASS: eval_command() exit alias movement");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() exit alias movement");
+              failed = failed + 1;
+            endif
+
+            eval_command("ts");
+            if (player.location == start)
+              player:tell("PASS: eval_command() return exit movement");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() return exit movement");
+              failed = failed + 1;
+            endif
+
+            if (eval_command("@list $player:tell"))
+              player:tell("PASS: eval_command() @list inherited verb");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @list inherited verb");
+              failed = failed + 1;
+            endif
+
+            if (eval_command("@exits"))
+              player:tell("PASS: eval_command() @exits");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @exits");
+              failed = failed + 1;
+            endif
+
+            eval_command("@create $thing named Script Test Toy,sttoy");
+            toy = player:match("sttoy");
+            if (valid(toy))
+              player:tell("PASS: eval_command() @create test toy");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @create test toy");
+              failed = failed + 1;
+            endif
+
+            eval_command("@property sttoy.wound");
+            if ($object_utils:has_property(toy, "wound") && toy.wound == 0)
+              player:tell("PASS: eval_command() @property");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @property");
+              failed = failed + 1;
+            endif
+
+            eval_command("@set sttoy.wound to 1");
+            if (toy.wound == 1)
+              player:tell("PASS: eval_command() @set");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @set");
+              failed = failed + 1;
+            endif
+
+            eval_command("@startup sttoy is \"starts rolling.\"");
+            if (toy.startup_msg == "starts rolling.")
+              player:tell("PASS: eval_command() @message assignment");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @message assignment");
+              failed = failed + 1;
+            endif
+
+            eval_command("@verb sttoy:wind this");
+            if ($object_utils:has_verb(toy, "wind"))
+              player:tell("PASS: eval_command() @verb");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @verb");
+              failed = failed + 1;
+            endif
+
+            eval_command("@verb sttoy:\"d*rop th*row\" this");
+            if ($object_utils:has_verb(toy, "drop") && $object_utils:has_verb(toy, "throw"))
+              player:tell("PASS: eval_command() @verb quoted wildcard names");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @verb quoted wildcard names");
+              failed = failed + 1;
+            endif
+
+            eval_command("@program sttoy:wind", {"player:tell(\"Script toy winds.\");", "."});
+            code = verb_code(toy, "wind");
+            if (length(code) == 1 && $string_utils:trim(code[1]) == "player:tell(\"Script toy winds.\");")
+              player:tell("PASS: eval_command() @program");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @program");
+              failed = failed + 1;
+            endif
+
+            eval_command("@edit sttoy:wind", {"replace 1", "player:tell(\"Script toy edited.\");", "compile"});
+            code = verb_code(toy, "wind");
+            if (length(code) == 1 && $string_utils:trim(code[1]) == "player:tell(\"Script toy edited.\");")
+              player:tell("PASS: eval_command() @edit");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @edit");
+              failed = failed + 1;
+            endif
+
+            eval_command("@program sttoy:drop", {"pass(@args);", "player:tell(\"Script toy drops.\");", "."});
+            code = verb_code(toy, "throw");
+            if (length(code) == 2 && $string_utils:trim(code[1]) == "pass(@args);" && $string_utils:trim(code[2]) == "player:tell(\"Script toy drops.\");")
+              player:tell("PASS: eval_command() @program wildcard verb");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @program wildcard verb");
+              failed = failed + 1;
+            endif
+
+            eval_command("drop sttoy");
+            if (toy.location == player.location)
+              player:tell("PASS: eval_command() command pass()");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() command pass()");
+              failed = failed + 1;
+            endif
+
+            if (eval_command("@list sttoy:wind"))
+              player:tell("PASS: eval_command() @list programmed verb");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @list programmed verb");
+              failed = failed + 1;
+            endif
+
+            if (eval_command("@display sttoy:"))
+              player:tell("PASS: eval_command() @display verbs");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @display verbs");
+              failed = failed + 1;
+            endif
+
+            if (eval_command("wind sttoy"))
+              player:tell("PASS: eval_command() programmed verb execution");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() programmed verb execution");
+              failed = failed + 1;
+            endif
+
+            fork forked_test_task (60)
+              player:tell("This should have been killed.");
+            endfork
+            if (eval_command("@forked"))
+              player:tell("PASS: eval_command() @forked");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @forked");
+              failed = failed + 1;
+            endif
+            kill_task(forked_test_task);
+
+            eval_command("@shutdown in 60 script test shutdown");
+            shutdown_task = $shutdown_task;
+            found_shutdown = 0;
+            if (typeof(shutdown_task) == INT)
+              for t in (queued_tasks())
+                if (t[1] == shutdown_task)
+                  found_shutdown = 1;
+                endif
+              endfor
+            endif
+
+            if (found_shutdown)
+              player:tell("PASS: eval_command() @shutdown schedules task");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @shutdown schedules task");
+              failed = failed + 1;
+            endif
+
+            eval_command("@abort-shutdown script test abort");
+            still_queued = 0;
+            for t in (queued_tasks())
+              if (t[1] == shutdown_task)
+                still_queued = 1;
+              endif
+            endfor
+
+            if (!still_queued && $shutdown_task == E_NONE)
+              player:tell("PASS: eval_command() @abort-shutdown");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @abort-shutdown");
+              failed = failed + 1;
+            endif
+
+            if (eval_command("@dump-db"))
+              player:tell("PASS: eval_command() @dump-db");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @dump-db");
+              failed = failed + 1;
+            endif
+
+            player:tell("---");
+            player:tell(passed, " script command tests passed, ", failed, " failed.");
+        """));
+
+        wiz.Verbs.Add(ScriptVerb(["@test"], """
+            eval_command("@test-builtins");
+            eval_command("@test-scripts");
+        """));
+    }
 }
+

@@ -16,12 +16,6 @@ public static partial class WorldSeeder {
     private static string WorldDataPath(params string[] parts)
         => Path.Combine([_worldDataRoot, .. parts]);
 
-    private static void AddFileObject(InMemoryObjectRepository repo, params string[] path) {
-        var loader = new FileWorldLoader();
-        var materializer = new FileObjectMaterializer();
-        repo.Add(materializer.ToMooObject(loader.LoadObject(WorldDataPath(path))));
-    }
-
     private static void AddFileObjects(InMemoryObjectRepository repo, params string[] path) {
         var loader = new FileWorldLoader();
         var materializer = new FileObjectMaterializer();
@@ -29,21 +23,6 @@ public static partial class WorldSeeder {
         foreach (var definition in loader.LoadDirectory(WorldDataPath(path)).Objects)
             repo.Add(materializer.ToMooObject(definition));
     }
-
-    private static MooObject Obj(
-        ObjectId id,
-        ObjectId ownerId,
-        ObjectId? parentId,
-        ObjectId? locationId,
-        string name)
-        => new() {
-            Id = id,
-            OwnerId = ownerId,
-            ParentId = parentId,
-            LocationId = locationId,
-            Name = name,
-            Flags = ObjectFlags.Readable
-        };
 
     private static MooVerb ScriptVerb(
         string[] names,
@@ -66,48 +45,4 @@ public static partial class WorldSeeder {
 
         return verb;
     }
-
-    private static MooVerb BuiltinVerb(
-        string[] names,
-        string implementation,
-        VerbObjectSpec dobj = VerbObjectSpec.None,
-        string prep = "none",
-        VerbObjectSpec iobj = VerbObjectSpec.None) {
-
-        var verb = new MooVerb {
-            OwnerId = ObjectId.System,
-            DirectObject = dobj,
-            Preposition = prep,
-            IndirectObject = iobj,
-            ImplementationKind = VerbImplementationKind.Builtin,
-            Code = implementation
-        };
-
-        foreach (var name in names)
-            verb.Names.Add(name);
-
-        return verb;
-    }
-
-    private static MooValue.List ObjList(params ObjectId[] ids)
-        => new(ids.Select(id => (MooValue)new MooValue.Object(id)).ToList());
-
-    private static MooValue.List StrList(params string[] values)
-        => new(values.Select(value => (MooValue)new MooValue.String(value)).ToList());
-
-    private static MooValue.List IntList(params int[] values)
-        => new(values.Select(value => (MooValue)new MooValue.Integer(value)).ToList());
-
-    private static void Prop(MooObject obj, string name, string value)
-        => Prop(obj, name, new MooValue.String(value));
-
-    private static void Prop(MooObject obj, string name, int value)
-        => Prop(obj, name, new MooValue.Integer(value));
-
-    private static void Prop(MooObject obj, string name, MooValue value)
-        => obj.Properties[name] = new MooProperty {
-            Name = name,
-            OwnerId = obj.OwnerId,
-            Value = value
-        };
 }

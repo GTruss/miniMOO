@@ -144,12 +144,28 @@ public class GameRunner {
         => _objects.All()
             .Where(obj => !IsCoreObject(obj));
 
-    private static bool IsCoreObject(MooObject obj)
-        => obj.Id == ObjectId.System
-           || (obj.Id.Value > 0
-               && obj.Id.Value < 100
-               && obj.Id != WorldIds.Wizard
-               && obj.Id != WorldIds.PlayerStart);
+    private bool IsCoreObject(MooObject obj) {
+        if (obj.Id == ObjectId.System)
+            return true;
+
+        if (obj.Id == _playerId)
+            return false;
+
+        if (TryGetSystemObjectReference("player_start") is { } playerStartId && obj.Id == playerStartId)
+            return false;
+
+        return obj.Id.Value > 0 && obj.Id.Value < 100;
+    }
+
+    private ObjectId? TryGetSystemObjectReference(string propertyName) {
+        var system = _objects.Get(ObjectId.System);
+        if (system is null)
+            return null;
+
+        return _resolver.FindPropertyValue(system.Id, propertyName) is MooValue.Object obj
+            ? obj.Value
+            : null;
+    }
 
     private static string LoadDatabaseRootPath(IReadOnlyList<string> args) {
         var fallback = Path.Combine(AppContext.BaseDirectory, "data");
