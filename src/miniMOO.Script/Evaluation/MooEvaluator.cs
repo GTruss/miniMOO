@@ -1134,11 +1134,11 @@ public sealed class MooEvaluator {
         }
     }
 
-    private static MooValue Valid(IReadOnlyList<MooValue> args) {
+    private MooValue Valid(IReadOnlyList<MooValue> args) {
         if (args.Count == 0 || args[0] is not MooValue.Object obj)
             return new MooValue.Integer(0);
 
-        return new MooValue.Integer(obj.Value.Value >= 0 ? 1 : 0);
+        return new MooValue.Integer(_context.World.Get(obj.Value) is not null ? 1 : 0);
     }
 
     private MooValue IsPlayer(IReadOnlyList<MooValue> args) {

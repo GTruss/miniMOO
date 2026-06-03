@@ -1,4 +1,5 @@
-﻿using miniMOO.Core.Things;
+﻿using System.Text.Json;
+using miniMOO.Core.Things;
 using miniMOO.Data.FileSystem;
 using miniMOO.Engine.Parser;
 using miniMOO.Host.World;
@@ -21,6 +22,7 @@ public class GameRunner {
     private bool _shutdownRequested;
     private string _shutdownMessage = "";
     private bool _dispatchingCommand;
+    private string _databaseRootPath = "";
 
     private readonly ObjectId _playerId = WorldSeeder.WizardId;
 
@@ -31,7 +33,12 @@ public class GameRunner {
     public void RunCLI(string[] args) {
         _terminal = new ConsoleTerminal();
         _output = new OutputService(_terminal);
-        _objects = WorldSeeder.Seed();
+
+        if (IsTestRun(args))
+            RefreshTestDatabase();
+
+        _databaseRootPath = LoadDatabaseRootPath(args);
+        _objects = WorldSeeder.Seed(_databaseRootPath);
 
         var matcher = new ObjectMatcher(_objects);
         var scriptRuntime = new TinyScriptRuntime();
@@ -41,7 +48,7 @@ public class GameRunner {
         _resolver = new ObjectResolver(_objects);
 
         var scriptWorld = new EngineScriptWorld(_objects, _resolver, _output, scriptRuntime);
-        scriptWorld.SetCheckpoint(() => Task.FromResult(CheckpointWorld()));
+        scriptWorld.SetCheckpoint(() => Task.FromResult(CheckpointDatabase()));
         scriptWorld.SetShutdown(message => Task.FromResult(RequestShutdown(message)));
 
         _dispatcher = new CommandDispatcher(_objects, _output, 
@@ -105,12 +112,14 @@ public class GameRunner {
         _output.Notify(_playerId, desc);
     }
 
-    private MooValue CheckpointWorld() {
+    private MooValue CheckpointDatabase() {
         var writer = new FileWorldWriter();
-        var worldPath = Path.Combine(AppContext.BaseDirectory, "data", "world");
-        var count = writer.WriteDirectory(worldPath, WorldObjects());
+        var corePath = Path.Combine(_databaseRootPath, "core");
+        var worldPath = Path.Combine(_databaseRootPath, "world");
+        var coreCount = writer.WriteDirectory(corePath, CoreObjects());
+        var worldCount = writer.WriteDirectory(worldPath, WorldObjects());
 
-        return new MooValue.String($"Checkpoint complete: {count} world objects written.");
+        return new MooValue.String($"Checkpoint complete: {coreCount} core objects and {worldCount} world objects written.");
     }
 
     private MooValue RequestShutdown(string message) {
@@ -128,9 +137,168 @@ public class GameRunner {
         return MooValue.NothingValue;
     }
 
+    private IEnumerable<MooObject> CoreObjects()
+        => _objects.All().Where(IsCoreObject);
+
     private IEnumerable<MooObject> WorldObjects()
         => _objects.All()
-            .Where(obj => obj.Id == WorldIds.Wizard
-                          || obj.Id == WorldIds.PlayerStart
-                          || obj.Id.Value >= WorldIds.Foyer.Value);
+            .Where(obj => !IsCoreObject(obj));
+
+    private static bool IsCoreObject(MooObject obj)
+        => obj.Id == ObjectId.System
+           || (obj.Id.Value > 0
+               && obj.Id.Value < 100
+               && obj.Id != WorldIds.Wizard
+               && obj.Id != WorldIds.PlayerStart);
+
+    private static string LoadDatabaseRootPath(IReadOnlyList<string> args) {
+        var fallback = Path.Combine(AppContext.BaseDirectory, "data");
+        var configName = SelectConfigName(args);
+        var configPath = FindAppSettingsPath(configName);
+
+        if (configPath is null)
+            return fallback;
+
+        try {
+            using var document = JsonDocument.Parse(File.ReadAllText(configPath));
+            var root = document.RootElement;
+
+            var configuredPath = TryGetString(root, "MiniMoo", "DatabasePath")
+                                 ?? TryGetString(root, "DatabasePath");
+
+            if (string.IsNullOrWhiteSpace(configuredPath))
+                return fallback;
+
+            if (Path.IsPathRooted(configuredPath))
+                return Path.GetFullPath(configuredPath);
+
+            var relativeBase = FindSolutionRoot(configPath)
+                               ?? FindSolutionRoot(Directory.GetCurrentDirectory())
+                               ?? Path.GetDirectoryName(configPath)
+                               ?? Directory.GetCurrentDirectory();
+
+            return Path.GetFullPath(Path.Combine(relativeBase, configuredPath));
+        }
+        catch (JsonException ex) {
+            throw new InvalidOperationException($"Invalid {configName}: {configPath}", ex);
+        }
+    }
+
+    private static bool IsTestRun(IReadOnlyList<string> args)
+        => args.Any(arg =>
+            arg.Equals("--test", StringComparison.OrdinalIgnoreCase)
+            || arg.Equals("--tests", StringComparison.OrdinalIgnoreCase));
+
+    private static void RefreshTestDatabase() {
+        var liveRoot = LoadDatabaseRootPath(["--live"]);
+        var testRoot = LoadDatabaseRootPath(["--test"]);
+
+        if (!Directory.Exists(liveRoot))
+            throw new DirectoryNotFoundException($"Live database directory not found: {liveRoot}");
+
+        if (Path.GetFullPath(liveRoot).Equals(Path.GetFullPath(testRoot), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Test database path must be different from live database path.");
+
+        RefreshDatabaseFolder(liveRoot, testRoot, "core");
+        RefreshDatabaseFolder(liveRoot, testRoot, "world");
+    }
+
+    private static void RefreshDatabaseFolder(string liveRoot, string testRoot, string folderName) {
+        var source = Path.Combine(liveRoot, folderName);
+        var target = Path.Combine(testRoot, folderName);
+
+        if (!Directory.Exists(source))
+            throw new DirectoryNotFoundException($"Live database folder not found: {source}");
+
+        Directory.CreateDirectory(target);
+
+        foreach (var file in Directory.EnumerateFiles(target, "*", SearchOption.TopDirectoryOnly))
+            File.Delete(file);
+
+        foreach (var directory in Directory.EnumerateDirectories(target, "*", SearchOption.TopDirectoryOnly))
+            Directory.Delete(directory, recursive: true);
+
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.TopDirectoryOnly))
+            File.Copy(file, Path.Combine(target, Path.GetFileName(file)), overwrite: true);
+    }
+
+    private static string SelectConfigName(IReadOnlyList<string> args) {
+        for (var i = 0; i < args.Count; i++) {
+            if (args[i].Equals("--test", StringComparison.OrdinalIgnoreCase)
+                || args[i].Equals("--tests", StringComparison.OrdinalIgnoreCase))
+                return "appsettings.tests.json";
+
+            if (args[i].Equals("--live", StringComparison.OrdinalIgnoreCase))
+                return "appsettings.live.json";
+
+            if (args[i].Equals("--settings", StringComparison.OrdinalIgnoreCase)
+                && i + 1 < args.Count)
+                return args[i + 1];
+        }
+
+        return "appsettings.live.json";
+    }
+
+    private static string? FindAppSettingsPath(string configName) {
+        foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory }) {
+            var dir = Path.GetFullPath(start);
+
+            while (!string.IsNullOrWhiteSpace(dir)) {
+                var candidate = Path.Combine(dir, configName);
+                if (File.Exists(candidate))
+                    return candidate;
+
+                var cliProjectCandidate = Path.Combine(dir, "src", "miniMOO.Cli", configName);
+                if (File.Exists(cliProjectCandidate))
+                    return cliProjectCandidate;
+
+                var parent = Directory.GetParent(dir)?.FullName;
+                if (parent is null || parent == dir)
+                    break;
+
+                dir = parent;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? FindSolutionRoot(string start) {
+        var dir = File.Exists(start)
+            ? Path.GetDirectoryName(start)
+            : start;
+
+        if (string.IsNullOrWhiteSpace(dir))
+            return null;
+
+        dir = Path.GetFullPath(dir);
+
+        while (!string.IsNullOrWhiteSpace(dir)) {
+            if (Directory.EnumerateFiles(dir, "*.slnx").Any()
+                || Directory.EnumerateFiles(dir, "*.sln").Any())
+                return dir;
+
+            var parent = Directory.GetParent(dir)?.FullName;
+            if (parent is null || parent == dir)
+                break;
+
+            dir = parent;
+        }
+
+        return null;
+    }
+
+    private static string? TryGetString(JsonElement root, params string[] path) {
+        var current = root;
+
+        foreach (var segment in path) {
+            if (current.ValueKind != JsonValueKind.Object
+                || !current.TryGetProperty(segment, out current))
+                return null;
+        }
+
+        return current.ValueKind == JsonValueKind.String
+            ? current.GetString()
+            : null;
+    }
 }

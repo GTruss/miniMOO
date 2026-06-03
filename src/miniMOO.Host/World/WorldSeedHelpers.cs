@@ -5,8 +5,16 @@ using miniMOO.Engine.Repositories;
 namespace miniMOO.Host.World;
 
 public static partial class WorldSeeder {
+    private static string _worldDataRoot = Path.Combine(AppContext.BaseDirectory, "data");
+
+    private static void SetWorldDataRoot(string? dataRootPath) {
+        _worldDataRoot = string.IsNullOrWhiteSpace(dataRootPath)
+            ? Path.Combine(AppContext.BaseDirectory, "data")
+            : Path.GetFullPath(dataRootPath);
+    }
+
     private static string WorldDataPath(params string[] parts)
-        => Path.Combine([AppContext.BaseDirectory, "data", .. parts]);
+        => Path.Combine([_worldDataRoot, .. parts]);
 
     private static void AddFileObject(InMemoryObjectRepository repo, params string[] path) {
         var loader = new FileWorldLoader();

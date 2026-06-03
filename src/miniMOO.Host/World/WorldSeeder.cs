@@ -55,7 +55,9 @@ public static partial class WorldSeeder {
     public static readonly ObjectId FoyerId = WorldIds.Foyer;
     public static readonly ObjectId LibraryId = WorldIds.Library;
 
-    public static IObjectRepository Seed() {
+    public static IObjectRepository Seed(string? dataRootPath = null) {
+        SetWorldDataRoot(dataRootPath);
+
         var repo = new InMemoryObjectRepository();
 
         AddSystemObject(repo);

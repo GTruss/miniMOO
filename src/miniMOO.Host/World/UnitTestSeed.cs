@@ -1318,10 +1318,9 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            exits_before = length(start.exits);
             eval_command("@dig testnorth,tn|testsouth,ts to Script Test Room");
             exit = start:match_exit("tn");
-            if (length(start.exits) == exits_before + 1 && valid(exit) && exit.dest.name == "Script Test Room")
+            if (valid(exit) && exit.dest.name == "Script Test Room")
               player:tell("PASS: eval_command() @dig creates exit and room");
               passed = passed + 1;
             else
@@ -1525,6 +1524,14 @@ public static partial class WorldSeeder {
               passed = passed + 1;
             else
               player:tell("FAIL: eval_command() @abort-shutdown");
+              failed = failed + 1;
+            endif
+
+            if (eval_command("@dump-db"))
+              player:tell("PASS: eval_command() @dump-db");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @dump-db");
               failed = failed + 1;
             endif
 

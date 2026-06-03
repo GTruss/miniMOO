@@ -92,10 +92,19 @@ internal sealed class YamlLite {
         var items = new List<string>();
         var current = "";
         var quote = '\0';
+        var escaped = false;
 
         foreach (var ch in inner) {
             if (quote != '\0') {
-                if (ch == quote)
+                if (escaped) {
+                    current += ch;
+                    escaped = false;
+                }
+                else if (ch == '\\') {
+                    current += ch;
+                    escaped = true;
+                }
+                else if (ch == quote)
                     quote = '\0';
                 else
                     current += ch;

@@ -432,3 +432,10 @@ FodyWeavers.xsd
 .obsidian/
 
 claude-memory.md
+databases/Archives/
+
+databases/ClockworkConservatory/
+
+src/miniMOO.Cli/Properties/launchSettings.json
+
+src/miniMOO.Cli/appsettings.clockwork.json

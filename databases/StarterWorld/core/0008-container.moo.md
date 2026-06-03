@@ -1,0 +1,21 @@
+---
+id: "#8"
+name: $container
+owner: "#0"
+parent: "#5"
+location:
+flags:
+  - readable
+  - fertile
+aliases: []
+created: 2026-05-24T14:33
+updated: 2026-05-24T14:33
+---
+
+# $container
+
+```yaml
+name: description
+type: string
+value: A container.
+```
