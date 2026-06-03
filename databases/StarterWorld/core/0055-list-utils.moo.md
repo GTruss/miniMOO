@@ -7,8 +7,7 @@ location:
 flags:
   - readable
 aliases: []
-created: 2026-05-24T15:10
-updated: 2026-05-24T15:10
+updated: 2026-06-03T07:55:16-05:00
 ---
 
 # $list_utils
@@ -16,12 +15,14 @@ updated: 2026-05-24T15:10
 ## Verb: assoc
 
 ```yaml
-names: [assoc]
+names: ["assoc"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -37,12 +38,14 @@ return {};
 ## Verb: make
 
 ```yaml
-names: [make]
+names: ["make"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -63,3 +66,4 @@ while (1)
   endif
 endwhile
 ```
+

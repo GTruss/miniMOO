@@ -7,57 +7,70 @@ location:
 flags:
   - readable
 aliases: []
-created: 2026-05-24T15:10
-updated: 2026-05-24T22:16
+updated: 2026-06-03T07:55:16-05:00
 ---
 
 # $code_utils
 
 ```yaml
-name: prepositions
-type: list
-value: ["with/using", "at/to", "in front of", "in/inside/into", "on top of/on/onto/upon", "out of/from inside/from", over, through, "under/underneath/beneath", behind, beside, "for/about", is, as, "off/off of"]
-```
-
-```yaml
 name: error_names
 type: list
 value: ["E_NONE", "E_TYPE", "E_DIV", "E_PERM", "E_PROPNF", "E_VERBNF", "E_VARNF", "E_INVIND", "E_RECMOVE", "E_MAXREC", "E_RANGE", "E_ARGS", "E_NACC", "E_INVARG", "E_QUOTA", "E_FLOAT"]
+flags:
+  - readable
 ```
 
 ```yaml
-name: _short_preps
+name: prepositions
 type: list
-value: [with, to, "in front of", in, on, from, over, through, under, behind, beside, for, is, as, off]
-```
-
-```yaml
-name: _other_preps
-type: list
-value: [using, at, inside, into, "on top of", onto, upon, "out of", "from inside", underneath, beneath, about, "off of"]
+value: ["with/using", "at/to", "in front of", "in/inside/into", "on top of/on/onto/upon", "out of/from inside/from", "over", "through", "under/underneath/beneath", "behind", "beside", "for/about", "is", "as", "off/off of"]
+flags:
+  - readable
 ```
 
 ```yaml
 name: _multi_preps
 type: list
-value: [off, from, out, on, "on top", in, "in front"]
+value: ["off", "from", "out", "on", "on top", "in", "in front"]
+flags:
+  - readable
+```
+
+```yaml
+name: _other_preps
+type: list
+value: ["using", "at", "inside", "into", "on top of", "onto", "upon", "out of", "from inside", "underneath", "beneath", "about", "off of"]
+flags:
+  - readable
 ```
 
 ```yaml
 name: _other_preps_n
 type: list
 value: [1, 2, 4, 4, 5, 5, 5, 6, 6, 9, 9, 12, 15]
+flags:
+  - readable
+```
+
+```yaml
+name: _short_preps
+type: list
+value: ["with", "to", "in front of", "in", "on", "from", "over", "through", "under", "behind", "beside", "for", "is", "as", "off"]
+flags:
+  - readable
 ```
 
 ## Verb: error_name
 
 ```yaml
-names: [error_name]
+names: ["error_name"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -68,12 +81,14 @@ return this.error_names[toint(args[1]) + 1];
 ## Verb: toerr
 
 ```yaml
-names: [toerr]
+names: ["toerr"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -91,12 +106,14 @@ return this.error_list[n];
 ## Verb: toobj
 
 ```yaml
-names: [toobj]
+names: ["toobj"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -106,12 +123,14 @@ return match(s = args[1], "^ *#[-+]?[0-9]+ *$") ? toobj(s) | E_TYPE;;
 ## Verb: parse_verbref
 
 ```yaml
-names: [parse_verbref]
+names: ["parse_verbref"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -137,12 +156,14 @@ endif
 ## Verb: parse_propref
 
 ```yaml
-names: [parse_propref]
+names: ["parse_propref"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -171,12 +192,14 @@ return {object, prop};
 ## Verb: get_prep
 
 ```yaml
-names: [get_prep]
+names: ["get_prep"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -199,12 +222,14 @@ return {prep, @args[rest..$]};
 ## Verb: full_prep
 
 ```yaml
-names: [full_prep]
+names: ["full_prep"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -221,12 +246,14 @@ endif
 ## Verb: verbname_match
 
 ```yaml
-names: [verbname_match]
+names: ["verbname_match"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -251,12 +278,14 @@ return 0;
 ## Verb: find_verb_named
 
 ```yaml
-names: [find_verb_named]
+names: ["find_verb_named"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -279,12 +308,14 @@ return 0;
 ## Verb: parse_argspec
 
 ```yaml
-names: [parse_argspec]
+names: ["parse_argspec"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -313,12 +344,14 @@ return {verbargs, rest};
 ## Verb: explain_verb_syntax
 
 ```yaml
-names: [explain_verb_syntax]
+names: ["explain_verb_syntax"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -342,3 +375,4 @@ else
 endif
 return tostr(verb, dobj_part ? " " + dobj_part | "", prep_part ? " " + prep_part | "", iobj_part ? " " + iobj_part | "");
 ```
+

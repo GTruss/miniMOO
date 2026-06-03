@@ -7,7 +7,8 @@ location:
 flags:
   - readable
 aliases: []
-updated: 2026-06-02T19:33:36-05:00
+created: 2026-05-24T15:10
+updated: 2026-05-24T21:23
 ---
 
 # $object_utils
@@ -15,14 +16,12 @@ updated: 2026-06-02T19:33:36-05:00
 ## Verb: has_callable_verb
 
 ```yaml
-names: ["has_callable_verb"]
+names: [has_callable_verb]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -39,14 +38,12 @@ return 0;
 ## Verb: accessible_verbs
 
 ```yaml
-names: ["accessible_verbs"]
+names: [accessible_verbs]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -63,14 +60,12 @@ return verbs;
 ## Verb: ancestors
 
 ```yaml
-names: ["ancestors"]
+names: [ancestors]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -87,14 +82,12 @@ return ret;
 ## Verb: isa
 
 ```yaml
-names: ["isa"]
+names: [isa]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -112,14 +105,12 @@ return 0;
 ## Verb: contains
 
 ```yaml
-names: ["contains"]
+names: [contains]
 dobj: none
 prep: none
 iobj: none
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -137,14 +128,12 @@ return 0;
 ## Verb: locations
 
 ```yaml
-names: ["locations"]
+names: [locations]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -156,17 +145,15 @@ endwhile
 return ret;
 ```
 
-## Verb: descendants/descendents
+## Verb: descendants
 
 ```yaml
-names: ["descendants", "descendents"]
+names: [descendants, descendents]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -185,14 +172,12 @@ return r;
 ## Verb: isoneof
 
 ```yaml
-names: ["isoneof"]
+names: [isoneof]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -214,14 +199,12 @@ return 0;
 ## Verb: isoneof
 
 ```yaml
-names: ["isoneof"]
+names: [isoneof]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -243,14 +226,12 @@ return 0;
 ## Verb: has_verb
 
 ```yaml
-names: ["has_verb"]
+names: [has_verb]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -273,14 +254,12 @@ return 0;
 ## Verb: has_property
 
 ```yaml
-names: ["has_property"]
+names: [has_property]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -293,7 +272,7 @@ except (E_PROPNF, E_INVIND)
 endtry
 ```
 
-## Verb: all_properties/all_verbs
+## Verb: all_properties, all_verbs
 
 ```yaml
 names: ["all_properties", "all_verbs"]
@@ -301,13 +280,10 @@ dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
 what = args[1];
 return verb == "all_verbs" ? all_verbs(what) | all_properties(what);
 ```
-

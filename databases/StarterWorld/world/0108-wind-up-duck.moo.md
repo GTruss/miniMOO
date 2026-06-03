@@ -9,7 +9,7 @@ flags:
 aliases:
   - "Wind-Up Duck"
   - "Duck"
-updated: 2026-05-26T20:49:41-05:00
+updated: 2026-06-03T07:55:16-05:00
 ---
 
 # Wind-Up Duck

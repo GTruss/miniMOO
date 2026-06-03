@@ -4,22 +4,32 @@ updated: 2026-06-02T19:05
 ---
 # miniMOO Test Database
 
-This folder is the working test database for miniMOO.
+This folder is the working source database for miniMOO test runs.
 
-It is not the source of truth for the default world. On every run of the CLI
-with `--test` or `--tests`, the host refreshes both `core/` and `world/` by
-copying them from the live database configured by `appsettings.live.json`
-into the test database configured by `appsettings.tests.json`.
+It is not the source of truth for the default live world, and it is no longer
+the database that `--test` opens directly.
 
-That means:
+Instead:
 
-- test runs always start from a fresh copy of the current live database
-- any old files already in `Tests/core` or `Tests/world` are deleted first
-- test-created objects and edits are written back into this folder during the test run
-- commands like `@dump-db` checkpoint both `core/` and `world/` here
+- `databases/Tests/core` and `databases/Tests/world` are the editable source
+  test world
+- `--test clone` copies that source world into `databases/Tests/.testruns`
+- plain `--test` opens the cloned `.testruns` database for manual testing
+- `--test run` opens the cloned `.testruns` database, logs in as `Tester`,
+  runs `@test-builtins` and `@test-scripts`, and exits
+- commands like `@dump-db` during test runs write into `.testruns`, not into
+  the source `Tests` world
 
-This is useful because the scripted test suite exercises real in-world commands
-and persistence behavior, not just isolated engine code.
+Recommended workflow:
+
+1. Make changes in the source test world under `databases/Tests`
+2. Run `--test clone`
+3. Either:
+   - run plain `--test` for manual testing, or
+   - run `--test run` for the scripted test suite
+
+This keeps the source test world clean while still exercising real in-world
+commands and persistence behavior.
 
 ## File Format
 

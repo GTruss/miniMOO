@@ -8,70 +8,60 @@ flags:
   - readable
   - fertile
 aliases: []
-updated: 2026-06-02T19:33:36-05:00
+created: 2026-05-24T14:35
+updated: 2026-05-25T15:26
 ---
 
-# $verb_editor
+# Verb Editor
+
+
+# active
 
 ```yaml
 name: active
 type: list
 value: []
-flags:
-  - readable
-```
-
-```yaml
-name: changes
-type: list
-value: []
-flags:
-  - readable
 ```
 
 ```yaml
 name: objects
 type: list
 value: []
-flags:
-  - readable
-```
-
-```yaml
-name: texts
-type: list
-value: []
-flags:
-  - readable
-```
-
-```yaml
-name: times
-type: list
-value: []
-flags:
-  - readable
 ```
 
 ```yaml
 name: verbnames
 type: list
 value: []
-flags:
-  - readable
+```
+
+```yaml
+name: texts
+type: list
+value: []
+```
+
+```yaml
+name: changes
+type: list
+value: []
+```
+
+```yaml
+name: times
+type: list
+value: []
 ```
 
 ## Verb: invoke
 
 ```yaml
-names: ["invoke"]
+names: [invoke]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -179,14 +169,12 @@ endwhile
 ## Verb: parse_invoke
 
 ```yaml
-names: ["parse_invoke"]
+names: [parse_invoke]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -250,14 +238,12 @@ return {object, verbref, code};
 ## Verb: fetch_verb_code
 
 ```yaml
-names: ["fetch_verb_code"]
+names: [fetch_verb_code]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -267,14 +253,12 @@ return verb_code(args[1], args[2]);
 ## Verb: set_verb_code
 
 ```yaml
-names: ["set_verb_code"]
+names: [set_verb_code]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -284,14 +268,12 @@ return set_verb_code(args[1], args[2], args[3]);
 ## Verb: loaded
 
 ```yaml
-names: ["loaded"]
+names: [loaded]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -301,14 +283,12 @@ return args[1] in this.active;
 ## Verb: unload
 
 ```yaml
-names: ["unload"]
+names: [unload]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -324,14 +304,12 @@ this.times = listdelete(this.times, who);
 ## Verb: working_on
 
 ```yaml
-names: ["working_on"]
+names: [working_on]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -350,14 +328,12 @@ endif
 ## Verb: set_changed
 
 ```yaml
-names: ["set_changed"]
+names: [set_changed]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -369,14 +345,12 @@ this.times[who] = time();
 ## Verb: read_block
 
 ```yaml
-names: ["read_block"]
+names: [read_block]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -398,14 +372,12 @@ endwhile
 ## Verb: list
 
 ```yaml
-names: ["list"]
+names: [list]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -422,14 +394,12 @@ endif
 ## Verb: compile
 
 ```yaml
-names: ["compile"]
+names: [compile]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -459,14 +429,12 @@ endtry
 ## Verb: help
 
 ```yaml
-names: ["help"]
+names: [help]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -479,4 +447,3 @@ player:tell("  replace <n>          replace line n with one new line");
 player:tell("  compile              save the verb code");
 player:tell("  abort                leave without saving");
 ```
-

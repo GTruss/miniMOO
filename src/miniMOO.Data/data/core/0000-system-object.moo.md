@@ -20,6 +20,14 @@ value: 9223372036854775807
 ```
 
 ```yaml
+name: last_restart_time
+type: integer
+value: 0
+flags:
+  - readable
+```
+
+```yaml
 name: shutdown_task
 type: error
 value: 0
@@ -92,9 +100,15 @@ value: "#9"
 ```
 
 ```yaml
-name: player_start
+name: login
 type: object
 value: "#10"
+```
+
+```yaml
+name: player_start
+type: object
+value: "#62"
 ```
 
 ```yaml
@@ -245,4 +259,20 @@ value: "#-2"
 name: ambiguous_match
 type: object
 value: "#-3"
+```
+
+## Verb: do_login_command
+
+```yaml
+names: [do_login_command]
+dobj: any
+prep: none
+iobj: any
+owner: "#0"
+flags: [readable, executable]
+```
+
+```csharp
+args = $login:parse_command(@args);
+return $login:(args[1])(@listdelete(args, 1));
 ```

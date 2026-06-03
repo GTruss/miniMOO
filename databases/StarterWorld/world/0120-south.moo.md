@@ -1,23 +1,23 @@
 ---
-id: "#116"
-name: testsouth
+id: "#120"
+name: south
 owner: "#2"
 parent: "#7"
 location:
 flags:
   - readable
 aliases:
-  - "testsouth"
-  - "ts"
-updated: 2026-06-02T19:33:36-05:00
+  - "south"
+  - "s"
+updated: 2026-06-03T07:55:16-05:00
 ---
 
-# testsouth
+# south
 
 ```yaml
 name: dest
 type: object
-value: "#101"
+value: "#62"
 flags:
   - readable
 ```
@@ -25,7 +25,7 @@ flags:
 ```yaml
 name: source
 type: object
-value: "#114"
+value: "#101"
 flags:
   - readable
 ```

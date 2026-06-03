@@ -439,3 +439,9 @@ databases/ClockworkConservatory/
 src/miniMOO.Cli/Properties/launchSettings.json
 
 src/miniMOO.Cli/appsettings.clockwork.json
+
+databases/StarterWorld/.backups/
+
+databases/Tests/.snapshots/
+
+databases/Tests/.testruns/

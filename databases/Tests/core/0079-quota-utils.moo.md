@@ -7,16 +7,16 @@ location:
 flags:
   - readable
 aliases: []
-updated: 2026-06-02T19:33:36-05:00
+created: 2026-05-25T00:00
+updated: 2026-05-25T08:10
 ---
 
-# $quota_utils
+# $byte_quota_utils
+
+Minimal quota utility object for LambdaCore-compatible scripts.
 
 ```yaml
 name: byte_based
 type: integer
 value: 1
-flags:
-  - readable
 ```
-

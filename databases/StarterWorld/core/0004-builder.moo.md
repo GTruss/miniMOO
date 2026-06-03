@@ -8,8 +8,7 @@ flags:
   - readable
   - fertile
 aliases: []
-created: 2026-05-24T14:35
-updated: 2026-05-24T19:24
+updated: 2026-06-03T07:55:16-05:00
 ---
 
 # $builder
@@ -18,17 +17,21 @@ updated: 2026-05-24T19:24
 name: build_options
 type: list
 value: []
+flags:
+  - readable
 ```
 
 ## Verb: build_option
 
 ```yaml
-names: [build_option]
+names: ["build_option"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -38,12 +41,14 @@ return $build_options:get(this.build_options, args[1]);
 ## Verb: _create
 
 ```yaml
-names: [_create]
+names: ["_create"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -58,7 +63,9 @@ dobj: any
 prep: any
 iobj: any
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -83,7 +90,9 @@ dobj: any
 prep: any
 iobj: any
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -149,7 +158,7 @@ if (exit_spec)
 endif
 ```
 
-## Verb: @setprop
+## Verb: @setprop/@set
 
 ```yaml
 names: ["@setprop", "@set"]
@@ -157,7 +166,9 @@ dobj: any
 prep: to
 iobj: any
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -209,3 +220,4 @@ else
   player:tell("Property ", dobjstr, " not found.");
 endif
 ```
+

@@ -9,7 +9,7 @@ flags:
 aliases:
   - "staff"
   - "gnarled staff"
-updated: 2026-06-02T19:33:36-05:00
+updated: 2026-05-26T20:49:41-05:00
 ---
 
 # a gnarled staff

@@ -1,17 +1,16 @@
 ---
-id: "#114"
-name: Script Test Room
-owner: "#2"
+id: "#62"
+name: The First Room
+owner: "#0"
 parent: "#3"
 location:
 flags:
   - readable
-aliases:
-  - "Script Test Room"
-updated: 2026-06-02T19:33:36-05:00
+aliases: []
+updated: 2026-06-03T07:55:16-05:00
 ---
 
-# Script Test Room
+# The First Room
 
 ```yaml
 name: blessed_object
@@ -22,9 +21,17 @@ flags:
 ```
 
 ```yaml
+name: description
+type: string
+value: "This is all there is right now."
+flags:
+  - readable
+```
+
+```yaml
 name: entrances
 type: list
-value: ["#115"]
+value: ["#120"]
 flags:
   - readable
 ```
@@ -32,7 +39,7 @@ flags:
 ```yaml
 name: exits
 type: list
-value: ["#116"]
+value: ["#119"]
 flags:
   - readable
 ```

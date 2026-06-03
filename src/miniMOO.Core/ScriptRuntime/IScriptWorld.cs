@@ -12,6 +12,8 @@ public interface IScriptWorld {
     Task EvalCommandAsync(ObjectId playerId, string command, IReadOnlyList<string>? inputLines = null);
     Task<MooValue> CheckpointAsync();
     Task<MooValue> ShutdownAsync(string message);
+    IReadOnlyList<ObjectId> GetConnectedPlayers();
+    Task BootPlayerAsync(ObjectId playerId);
     Task<ScriptResult> InvokeVerbAsync(ScriptContext callerContext, ObjectId thisId, 
         string verb, IReadOnlyList<MooValue> args, ObjectId? searchFromId = null);
 

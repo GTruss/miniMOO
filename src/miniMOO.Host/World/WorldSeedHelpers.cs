@@ -24,12 +24,8 @@ public static partial class WorldSeeder {
             repo.Add(materializer.ToMooObject(definition));
     }
 
-    private static MooVerb ScriptVerb(
-        string[] names,
-        string code,
-        VerbObjectSpec dobj = VerbObjectSpec.None,
-        string prep = "none",
-        VerbObjectSpec iobj = VerbObjectSpec.None) {
+    private static MooVerb ScriptVerb(string[] names, string code, VerbObjectSpec dobj = VerbObjectSpec.None,
+            string prep = "none", VerbObjectSpec iobj = VerbObjectSpec.None) {
 
         var verb = new MooVerb {
             OwnerId = ObjectId.System,

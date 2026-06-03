@@ -7,8 +7,7 @@ location:
 flags:
   - readable
 aliases: []
-created: 2026-05-24T15:10
-updated: 2026-05-24T21:02
+updated: 2026-06-03T07:55:16-05:00
 ---
 
 # $string_utils
@@ -16,12 +15,14 @@ updated: 2026-05-24T21:02
 ## Verb: explode
 
 ```yaml
-names: [explode]
+names: ["explode"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -44,12 +45,14 @@ return parts;
 ## Verb: english_list
 
 ```yaml
-names: [english_list]
+names: ["english_list"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -76,12 +79,14 @@ endif
 ## Verb: regexp_quote
 
 ```yaml
-names: [regexp_quote]
+names: ["regexp_quote"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -94,15 +99,17 @@ endwhile
 return string + quoted;
 ```
 
-## Verb: index_delimited
+## Verb: index_delimited/index_d
 
 ```yaml
-names: [index_delimited, index_d]
+names: ["index_delimited", "index_d"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -113,12 +120,14 @@ return (m = match(@args)) ? m[3][1][2] + 1 | 0;
 ## Verb: from_list
 
 ```yaml
-names: [from_list]
+names: ["from_list"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -136,15 +145,17 @@ else
 endif
 ```
 
-## Verb: columnize
+## Verb: columnize/columnise
 
 ```yaml
-names: [columnize, columnise]
+names: ["columnize", "columnise"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -169,12 +180,14 @@ return result;
 ## Verb: left
 
 ```yaml
-names: [left]
+names: ["left"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -188,7 +201,7 @@ else
 endif
 ```
 
-## Verb: centre
+## Verb: centre/center
 
 ```yaml
 names: ["centre", "center"]
@@ -196,7 +209,9 @@ dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -213,12 +228,14 @@ endif
 ## Verb: right
 
 ```yaml
-names: [right]
+names: ["right"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -235,12 +252,14 @@ endif
 ## Verb: trim
 
 ```yaml
-names: [trim]
+names: ["trim"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -252,45 +271,51 @@ return string[m[1]..m[2]];
 ## Verb: triml
 
 ```yaml
-names: [triml]
+names: ["triml"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
 {string, ?what = " "} = args;
 m = match(string, tostr("[^", what, "]%|$"));
 return string[m[1]..$];
- ```
+```
 
 ## Verb: trimr
 
 ```yaml
-names: [trimr]
+names: ["trimr"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
 {string, ?what = " "} = args;
 return string[1..rmatch(string, tostr("[^", what, "]%|^"))[2]];
- ```
+```
 
 ## Verb: space
 
 ```yaml
-names: [space]
+names: ["space"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -322,12 +347,14 @@ return n > 0 ? fill[1..n] | fill[$ + 1 + n..$];
 ## Verb: from_value
 
 ```yaml
-names: [from_value]
+names: ["from_value"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -370,12 +397,14 @@ endif
 ## Verb: to_value
 
 ```yaml
-names: [to_value]
+names: ["to_value"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -396,12 +425,14 @@ endif
 ## Verb: _tolist
 
 ```yaml
-names: [_tolist]
+names: ["_tolist"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -444,12 +475,14 @@ endwhile
 ## Verb: _toscalar
 
 ```yaml
-names: [_toscalar]
+names: ["_toscalar"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -476,12 +509,14 @@ endif
 ## Verb: prefix_to_value
 
 ```yaml
-names: [prefix_to_value]
+names: ["prefix_to_value"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -511,12 +546,14 @@ endif
 ## Verb: _unquote
 
 ```yaml
-names: [_unquote]
+names: ["_unquote"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -536,12 +573,14 @@ return {0, result + rest};
 ## Verb: words
 
 ```yaml
-names: [words]
+names: ["words"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -583,12 +622,14 @@ return rest || char != " " ? {@toklist, token + rest} | toklist;
 ## Verb: word_start
 
 ```yaml
-names: [word_start]
+names: ["word_start"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -623,12 +664,14 @@ return rest || char != " " ? {@wslist, {wstart, wbefore + length(rest)}} | wslis
 ## Verb: char_list
 
 ```yaml
-names: [char_list]
+names: ["char_list"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -643,15 +686,17 @@ else
 endif
 ```
 
-## Verb: capitalize
+## Verb: capitalize/capitalise
 
 ```yaml
-names: [capitalize, capitalise]
+names: ["capitalize", "capitalise"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -665,12 +710,14 @@ return string;
 ## Verb: print
 
 ```yaml
-names: [print]
+names: ["print"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -695,15 +742,17 @@ else
 endif
 ```
 
-## Verb: name_and_number
+## Verb: name_and_number/nn/name_and_number_list/nn_list
 
 ```yaml
-names: [name_and_number, nn, name_and_number_list, nn_list]
+names: ["name_and_number", "nn", "name_and_number_list", "nn_list"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -723,12 +772,14 @@ return this:english_list(name_list, @eng_args);
 ## Verb: match_player
 
 ```yaml
-names: [match_player]
+names: ["match_player"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -766,12 +817,14 @@ return retstr ? found[1] | found;
 ## Verb: match
 
 ```yaml
-names: [match]
+names: ["match"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -812,12 +865,14 @@ return no_exact_match && (no_partial_match && $failed_match);
 ## Verb: match_object
 
 ```yaml
-names: [match_object]
+names: ["match_object"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -842,12 +897,14 @@ endif
 ## Verb: literal_object
 
 ```yaml
-names: [literal_object]
+names: ["literal_object"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -880,27 +937,32 @@ endif
 ## Verb: abbreviated_value
 
 ```yaml
-names: [abbreviated_value]
+names: ["abbreviated_value"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
 {value, ?max_reslen = $maxint, ?max_lstlev = $maxint, ?max_lstlen = $maxint, ?max_strlen = $maxint, ?max_toklen = $maxint} = args;
 return this:_abbreviated_value(value, max_reslen, max_lstlev, max_lstlen, max_strlen, max_toklen);
 ```
+
 ## Verb: _abbreviated_value
 
 ```yaml
-names: [_abbreviated_value]
+names: ["_abbreviated_value"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -971,3 +1033,4 @@ else
   return length(v) > len ? v[1..len - 3] + "..." | v;
 endif
 ```
+

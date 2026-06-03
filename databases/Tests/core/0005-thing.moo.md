@@ -8,111 +8,92 @@ flags:
   - readable
   - fertile
 aliases: []
-updated: 2026-06-02T19:33:36-05:00
+created: 2026-05-24T14:33
+updated: 2026-05-24T14:33
 ---
 
 # $thing
 
+Generic thing prototype.
+
 ```yaml
 name: description
 type: string
-value: "You see nothing special about it."
-flags:
-  - readable
-```
-
-```yaml
-name: drop_failed_msg
-type: string
-value: ""
-flags:
-  - readable
-```
-
-```yaml
-name: drop_succeeded_msg
-type: string
-value: ""
-flags:
-  - readable
-```
-
-```yaml
-name: odrop_failed_msg
-type: string
-value: ""
-flags:
-  - readable
-```
-
-```yaml
-name: odrop_succeeded_msg
-type: string
-value: ""
-flags:
-  - readable
-```
-
-```yaml
-name: otake_failed_msg
-type: string
-value: ""
-flags:
-  - readable
-```
-
-```yaml
-name: otake_succeeded_msg
-type: string
-value: ""
-flags:
-  - readable
+value: You see nothing special about it.
 ```
 
 ```yaml
 name: take_failed_msg
 type: string
-value: ""
-flags:
-  - readable
+value:
 ```
 
 ```yaml
 name: take_succeeded_msg
 type: string
-value: ""
-flags:
-  - readable
+value:
 ```
 
-## Verb: take_failed_msg/take_succeeded_msg/otake_failed_msg/otake_succeeded_msg/drop_failed_msg/drop_succeeded_msg/odrop_failed_msg/odrop_succeeded_msg
+```yaml
+name: otake_failed_msg
+type: string
+value:
+```
 
 ```yaml
-names: ["take_failed_msg", "take_succeeded_msg", "otake_failed_msg", "otake_succeeded_msg", "drop_failed_msg", "drop_succeeded_msg", "odrop_failed_msg", "odrop_succeeded_msg"]
+name: otake_succeeded_msg
+type: string
+value:
+```
+
+```yaml
+name: drop_failed_msg
+type: string
+value:
+```
+
+```yaml
+name: drop_succeeded_msg
+type: string
+value:
+```
+
+```yaml
+name: odrop_failed_msg
+type: string
+value:
+```
+
+```yaml
+name: odrop_succeeded_msg
+type: string
+value:
+```
+
+## Verb: message accessors
+
+```yaml
+names: [take_failed_msg, take_succeeded_msg, otake_failed_msg, otake_succeeded_msg, drop_failed_msg, drop_succeeded_msg, odrop_failed_msg, odrop_succeeded_msg]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
 return this.(verb);
 ```
 
-## Verb: drop/d/throw/th
+## Verb: drop
 
 ```yaml
-names: ["drop", "d", "throw", "th"]
+names: [drop, d, throw, th]
 dobj: this
 prep: none
 iobj: none
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -136,17 +117,15 @@ else
 endif
 ```
 
-## Verb: get/g/take/t
+## Verb: get
 
 ```yaml
-names: ["get", "g", "take", "t"]
+names: [get, g, take, t]
 dobj: this
 prep: none
 iobj: none
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -169,4 +148,3 @@ else
   endif
 endif
 ```
-

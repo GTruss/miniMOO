@@ -8,59 +8,70 @@ flags:
   - readable
   - fertile
 aliases: []
-created: 2026-05-24T14:35
-updated: 2026-05-25T06:51
+updated: 2026-06-03T07:55:16-05:00
 ---
 
 # $player
-
-Generic player prototype.
-
-```yaml
-name: description
-type: string
-value: A nondescript person.
-```
-
-```yaml
-name: namec
-type: string
-value: generic player
-```
 
 ```yaml
 name: brief
 type: integer
 value: 0
+flags:
+  - readable
 ```
 
 ```yaml
-name: linelen
-type: integer
-value: -79
+name: description
+type: string
+value: "A nondescript person."
+flags:
+  - readable
 ```
 
 ```yaml
 name: display_options
 type: list
 value: []
+flags:
+  - readable
 ```
 
 ```yaml
 name: features
 type: list
 value: []
+flags:
+  - readable
+```
+
+```yaml
+name: linelen
+type: integer
+value: -79
+flags:
+  - readable
+```
+
+```yaml
+name: namec
+type: string
+value: "generic player"
+flags:
+  - readable
 ```
 
 ## Verb: titlec
 
 ```yaml
-names: [titlec]
+names: ["titlec"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -70,12 +81,14 @@ return `this.namec ! E_PROPNF => this:title()';
 ## Verb: moveto
 
 ```yaml
-names: [moveto]
+names: ["moveto"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -94,7 +107,9 @@ dobj: none
 prep: none
 iobj: none
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -112,12 +127,14 @@ endif
 ## Verb: home
 
 ```yaml
-names: [home]
+names: ["home"]
 dobj: none
 prep: none
 iobj: none
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -160,12 +177,14 @@ endif
 ## Verb: tell_lines
 
 ```yaml
-names: [tell_lines]
+names: ["tell_lines"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -179,12 +198,14 @@ this:notify_lines(lines);
 ## Verb: linelen
 
 ```yaml
-names: [linelen]
+names: ["linelen"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -194,12 +215,14 @@ return abs(this.linelen);
 ## Verb: display_option
 
 ```yaml
-names: [display_option]
+names: ["display_option"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -209,12 +232,14 @@ return $display_options:get(this.display_options, args[1]);
 ## Verb: tell_contents
 
 ```yaml
-names: [tell_contents]
+names: ["tell_contents"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -241,12 +266,14 @@ endif
 ## Verb: notify_lines
 
 ```yaml
-names: [notify_lines]
+names: ["notify_lines"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -255,7 +282,7 @@ for line in (typeof(lines = args[1]) != LIST ? {lines} | lines)
 endfor
 ```
 
-## Verb: @describe
+## Verb: @describe/@desc
 
 ```yaml
 names: ["@describe", "@desc"]
@@ -263,7 +290,9 @@ dobj: any
 prep: as
 iobj: any
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -280,12 +309,14 @@ endif
 ## Verb: my_match_object
 
 ```yaml
-names: [my_match_object]
+names: ["my_match_object"]
 dobj: any
 prep: none
 iobj: none
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -295,12 +326,14 @@ return $string_utils:match_object(@{@args, this.location}[1..2], this);
 ## Verb: wave
 
 ```yaml
-names: [wave]
+names: ["wave"]
 dobj: none
 prep: none
 iobj: none
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -308,15 +341,17 @@ player:tell("You wave.");
 player.location:announce(player.name, " waves.");
 ```
 
-## Verb: inventory
+## Verb: list inventory/i
 
 ```yaml
-names: ["list inventory", i]
+names: ["list inventory", "i"]
 dobj: none
 prep: none
 iobj: none
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -327,7 +362,7 @@ else
 endif
 ```
 
-## Verb: @examine
+## Verb: @examine/@exam
 
 ```yaml
 names: ["@examine", "@exam"]
@@ -335,7 +370,9 @@ dobj: any
 prep: none
 iobj: none
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -436,7 +473,9 @@ dobj: any
 prep: none
 iobj: none
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -487,7 +526,9 @@ dobj: any
 prep: none
 iobj: none
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -527,7 +568,9 @@ dobj: any
 prep: none
 iobj: none
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -544,7 +587,7 @@ else
 endif
 ```
 
-## Verb: @describe
+## Verb: @desc*ribe
 
 ```yaml
 names: ["@desc*ribe"]
@@ -552,7 +595,9 @@ dobj: any
 prep: as
 iobj: any
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -566,3 +611,4 @@ else
   player:notify(tostr(e));
 endif
 ```
+

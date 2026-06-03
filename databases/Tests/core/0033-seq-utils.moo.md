@@ -7,7 +7,8 @@ location:
 flags:
   - readable
 aliases: []
-updated: 2026-06-02T19:33:36-05:00
+created: 2026-05-24T15:10
+updated: 2026-05-24T15:10
 ---
 
 # $seq_utils
@@ -15,14 +16,12 @@ updated: 2026-06-02T19:33:36-05:00
 ## Verb: from_string
 
 ```yaml
-names: ["from_string"]
+names: [from_string]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -73,14 +72,12 @@ return this:union(@parts);
 ## Verb: union
 
 ```yaml
-names: ["union"]
+names: [union]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -101,14 +98,12 @@ return result;
 ## Verb: intersection
 
 ```yaml
-names: ["intersection"]
+names: [intersection]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -135,14 +130,12 @@ return result;
 ## Verb: _add_interval
 
 ```yaml
-names: ["_add_interval"]
+names: [_add_interval]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -178,14 +171,12 @@ return inserted ? new | {@new, first, after};
 ## Verb: _intersect_two
 
 ```yaml
-names: ["_intersect_two"]
+names: [_intersect_two]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -211,4 +202,3 @@ endwhile
 
 return result;
 ```
-

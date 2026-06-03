@@ -8,7 +8,8 @@ flags:
   - readable
   - fertile
 aliases: []
-updated: 2026-06-02T19:33:36-05:00
+created: 2026-05-24T14:33
+updated: 2026-05-24T14:33
 ---
 
 # $container
@@ -16,8 +17,5 @@ updated: 2026-06-02T19:33:36-05:00
 ```yaml
 name: description
 type: string
-value: "A container."
-flags:
-  - readable
+value: A container.
 ```
-

@@ -7,45 +7,54 @@ location:
 flags:
   - readable
 aliases: []
-created: 2026-05-24T15:10
-updated: 2026-05-24T15:10
+updated: 2026-06-03T07:55:16-05:00
 ---
 
 # $gender_utils
 
 ```yaml
+name: be
+type: list
+value: ["is", "is", "is", "is", "is", "is", "are", "are", "are", "are"]
+flags:
+  - readable
+```
+
+```yaml
 name: genders
 type: list
-value: [neuter, male, female, either, spivak, splat, plural, egotistical, royal, 2nd]
+value: ["neuter", "male", "female", "either", "spivak", "splat", "plural", "egotistical", "royal", "2nd"]
+flags:
+  - readable
+```
+
+```yaml
+name: have
+type: list
+value: ["has", "has", "has", "has", "has", "has", "have", "have", "have", "have"]
+flags:
+  - readable
 ```
 
 ```yaml
 name: is_plural
 type: list
 value: [0, 0, 0, 0, 0, 0, 1, 0, 1, 0]
+flags:
+  - readable
 ```
 
-```yaml
-name: have
-type: list
-value: [has, has, has, has, has, has, have, have, have, have]
-```
+## Verb: get_conj/get_conjugation
 
 ```yaml
-name: be
-type: list
-value: [is, is, is, is, is, is, are, are, are, are]
-```
-
-## Verb: get_conj
-
-```yaml
-names: [get_conj, get_conjugation]
+names: ["get_conj", "get_conjugation"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -73,12 +82,14 @@ endif
 ## Verb: _verb_plural
 
 ```yaml
-names: [_verb_plural]
+names: ["_verb_plural"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -111,12 +122,14 @@ endif
 ## Verb: _verb_singular
 
 ```yaml
-names: [_verb_singular]
+names: ["_verb_singular"]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -141,3 +154,4 @@ else
   return st + "s";
 endif
 ```
+

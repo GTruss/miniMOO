@@ -3,13 +3,14 @@ id: "#2"
 name: Wizard
 owner: "#2"
 parent: "#57"
-location: "#101"
+location: "#62"
 flags:
   - user
   - programmer
   - wizard
-aliases: []
-updated: 2026-06-02T19:33:36-05:00
+aliases:
+  - "wizard"
+updated: 2026-05-26T20:49:41-05:00
 ---
 
 # Wizard
@@ -31,17 +32,9 @@ flags:
 ```
 
 ```yaml
-name: _test_fork_cancelled
-type: integer
-value: 0
-flags:
-  - readable
-```
-
-```yaml
-name: _test_fork_immediate
-type: integer
-value: 1
+name: password
+type: string
+value: "wizard"
 flags:
   - readable
 ```

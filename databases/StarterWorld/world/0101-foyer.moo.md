@@ -7,7 +7,7 @@ location:
 flags:
   - readable
 aliases: []
-updated: 2026-05-26T20:49:41-05:00
+updated: 2026-06-03T07:55:16-05:00
 ---
 
 # The Foyer
@@ -31,7 +31,7 @@ flags:
 ```yaml
 name: entrances
 type: list
-value: ["#105", "#116"]
+value: ["#105", "#116", "#119"]
 flags:
   - readable
 ```
@@ -39,7 +39,7 @@ flags:
 ```yaml
 name: exits
 type: list
-value: ["#104", "#115"]
+value: ["#104", "#115", "#120"]
 flags:
   - readable
 ```

@@ -16,6 +16,8 @@ public sealed class EngineScriptWorld : IScriptWorld {
     private Func<ObjectId, Task<string?>>? _readInput;
     private Func<Task<MooValue>>? _checkpoint;
     private Func<string, Task<MooValue>>? _shutdown;
+    private Func<IReadOnlyList<ObjectId>>? _connectedPlayers;
+    private Func<ObjectId, Task>? _bootPlayer;
     private readonly Dictionary<ObjectId, Stack<Queue<string>>> _scriptedInput = new();
 
     public EngineScriptWorld(IObjectRepository objects, IObjectResolver resolver, OutputService output,
@@ -38,6 +40,12 @@ public sealed class EngineScriptWorld : IScriptWorld {
 
     public void SetShutdown(Func<string, Task<MooValue>> shutdown)
         => _shutdown = shutdown;
+
+    public void SetConnectedPlayers(Func<IReadOnlyList<ObjectId>> connectedPlayers)
+        => _connectedPlayers = connectedPlayers;
+
+    public void SetBootPlayer(Func<ObjectId, Task> bootPlayer)
+        => _bootPlayer = bootPlayer;
 
     public MooObject? Get(ObjectId id)
         => _objects.Get(id);
@@ -147,6 +155,16 @@ public sealed class EngineScriptWorld : IScriptWorld {
             await _checkpoint();
 
         return await _shutdown(message);
+    }
+
+    public IReadOnlyList<ObjectId> GetConnectedPlayers()
+        => _connectedPlayers?.Invoke() ?? [];
+
+    public Task BootPlayerAsync(ObjectId playerId) {
+        if (_bootPlayer is null)
+            throw new MooScriptException(MooErrorCode.E_INVARG, "boot_player() is not available.");
+
+        return _bootPlayer(playerId);
     }
 
     public async Task<ScriptResult> InvokeVerbAsync(ScriptContext callerContext, ObjectId thisId,
@@ -273,6 +291,49 @@ public sealed class EngineScriptWorld : IScriptWorld {
                 }
 
                 return;
+
+            case "owner":
+                if (value is not MooValue.Object owner)
+                    throw new InvalidOperationException("Object owner must be an object.");
+
+                obj.OwnerId = owner.Value;
+                return;
+
+            case "parent":
+                if (value is MooValue.Object parent) {
+                    if (parent.Value.IsNothing) {
+                        obj.ParentId = null;
+                        return;
+                    }
+
+                    if (_objects.Get(parent.Value) is null)
+                        throw new InvalidOperationException($"Parent object {parent.Value} not found.");
+
+                    obj.ParentId = parent.Value;
+                    return;
+                }
+
+                throw new InvalidOperationException("Object parent must be an object.");
+
+            case "r":
+                SetObjectFlag(obj, ObjectFlags.Readable, ToTruthyInteger(value));
+                return;
+
+            case "w":
+                SetObjectFlag(obj, ObjectFlags.Writable, ToTruthyInteger(value));
+                return;
+
+            case "f":
+                SetObjectFlag(obj, ObjectFlags.Fertile, ToTruthyInteger(value));
+                return;
+
+            case "programmer":
+                SetObjectFlag(obj, ObjectFlags.Programmer, ToTruthyInteger(value));
+                return;
+
+            case "wizard":
+                SetObjectFlag(obj, ObjectFlags.Wizard, ToTruthyInteger(value));
+                return;
         }
 
         obj.Properties[propName] = new MooProperty {
@@ -305,6 +366,20 @@ public sealed class EngineScriptWorld : IScriptWorld {
             Flags = flags,
             Value = value
         };
+    }
+
+    private static int ToTruthyInteger(MooValue value)
+        => value switch {
+            MooValue.Integer i => i.Value == 0 ? 0 : 1,
+            MooValue.Float f => f.Value == 0 ? 0 : 1,
+            _ => throw new InvalidOperationException("Flag values must be numeric.")
+        };
+
+    private static void SetObjectFlag(MooObject obj, ObjectFlags flag, int enabled) {
+        if (enabled != 0)
+            obj.Flags |= flag;
+        else
+            obj.Flags &= ~flag;
     }
 
     public long AddVerb(ObjectId objId, string verbNames, string script, ObjectId ownerId) {

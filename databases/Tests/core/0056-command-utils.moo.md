@@ -7,7 +7,8 @@ location:
 flags:
   - readable
 aliases: []
-updated: 2026-06-02T19:33:36-05:00
+created: 2026-05-24T15:10
+updated: 2026-05-24T22:33
 ---
 
 # $command_utils
@@ -15,14 +16,12 @@ updated: 2026-06-02T19:33:36-05:00
 ## Verb: do_huh
 
 ```yaml
-names: ["do_huh"]
+names: [do_huh]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -58,14 +57,12 @@ endif
 ## Verb: explain_syntax
 
 ```yaml
-names: ["explain_syntax"]
+names: [explain_syntax]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -91,14 +88,12 @@ return 0;
 ## Verb: object_match_failed
 
 ```yaml
-names: ["object_match_failed"]
+names: [object_match_failed]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -127,14 +122,12 @@ return 1;
 ## Verb: read_lines
 
 ```yaml
-names: ["read_lines"]
+names: [read_lines]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -168,14 +161,12 @@ endwhile
 ## Verb: read_lines_escape
 
 ```yaml
-names: ["read_lines_escape"]
+names: [read_lines_escape]
 dobj: this
 prep: none
 iobj: this
 owner: "#0"
-flags:
-  - readable
-  - executable
+flags: [readable, executable]
 ```
 
 ```csharp
@@ -217,4 +208,3 @@ while (1)
   endtry
 endwhile
 ```
-

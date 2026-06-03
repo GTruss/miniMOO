@@ -7,8 +7,7 @@ location:
 flags:
   - readable
 aliases: []
-created: 2026-05-24T15:10
-updated: 2026-05-24T15:10
+updated: 2026-06-03T07:55:16-05:00
 ---
 
 # $building_utils
@@ -16,12 +15,14 @@ updated: 2026-05-24T15:10
 ## Verb: parse_names
 
 ```yaml
-names: [parse_names]
+names: ["parse_names"]
 dobj: none
 prep: none
 iobj: none
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -44,12 +45,14 @@ return {name, aliases};
 ## Verb: set_names
 
 ```yaml
-names: [set_names]
+names: ["set_names"]
 dobj: none
 prep: none
 iobj: none
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -68,12 +71,14 @@ endwhile
 ## Verb: make_exit
 
 ```yaml
-names: [make_exit]
+names: ["make_exit"]
 dobj: none
 prep: none
 iobj: none
 owner: "#0"
-flags: [readable, executable]
+flags:
+  - readable
+  - executable
 ```
 
 ```csharp
@@ -108,3 +113,4 @@ else
   return 0;
 endif
 ```
+

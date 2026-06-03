@@ -9,7 +9,7 @@ namespace miniMOO.Host.World;
 /// </summary>
 public static partial class WorldSeeder {
     public static readonly ObjectId WizardId = new(2);
-    private static readonly ObjectId WizardPrototypeId = new(57);
+    public static readonly ObjectId TesterId = new(118);
 
     public static IObjectRepository Seed(string? dataRootPath = null) {
         SetWorldDataRoot(dataRootPath);
@@ -30,38 +30,50 @@ public static partial class WorldSeeder {
         => AddFileObjects(repo, "world");
 
     private static void AddUnitTests(InMemoryObjectRepository repo) {
-        var wiz = repo.Get(WizardPrototypeId);
-        if (wiz is null)
+        var tester = repo.Get(TesterId);
+        if (tester is null)
             return;
 
-        wiz.Properties["_test_clear_property"] = new MooProperty {
+        var testVerbNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            "@parsefail1",
+            "@parsefail2",
+            "_test_destructure",
+            "_test_dynamic_verb_target",
+            "@test-builtins",
+            "@test-scripts",
+            "@test"
+        };
+
+        tester.Verbs.RemoveAll(verb => verb.Names.Any(name => testVerbNames.Contains(name)));
+
+        tester.Properties["_test_clear_property"] = new MooProperty {
             Name = "_test_clear_property",
             OwnerId = ObjectId.System,
             Value = MooValue.ClearValue
         };
 
-        wiz.Verbs.Add(ScriptVerb(["@parsefail1"], """
+        tester.Verbs.Add(ScriptVerb(["@parsefail1"], """
             player:tell("before parse failure");
             value = "unterminated;
             player:tell("after parse failure");
         """));
 
-        wiz.Verbs.Add(ScriptVerb(["@parsefail2"], """
+        tester.Verbs.Add(ScriptVerb(["@parsefail2"], """
             player:tell("before parse failure");
             value = 1 + ;
             player:tell("after parse failure");
         """));
 
-        wiz.Verbs.Add(ScriptVerb(["_test_destructure"], """
+        tester.Verbs.Add(ScriptVerb(["_test_destructure"], """
             {a, b} = args;
             return (a == "left" && b == "right");
         """));
 
-        wiz.Verbs.Add(ScriptVerb(["_test_dynamic_verb_target"], """
+        tester.Verbs.Add(ScriptVerb(["_test_dynamic_verb_target"], """
             return tostr("dynamic:", args[1]);
         """));
 
-        wiz.Verbs.Add(ScriptVerb(["@test-builtins"], """
+        tester.Verbs.Add(ScriptVerb(["@test-builtins"], """
             player:tell("Running miniMOO tests...");
 
             passed = 0;
@@ -561,7 +573,9 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            if ("staff" in player.contents[1].aliases)
+            alias_test_obj = create($thing);
+            add_alias(alias_test_obj, "staff");
+            if ("staff" in alias_test_obj.aliases)
               player:tell("PASS: aliases builtin property");
               passed = passed + 1;
             else
@@ -631,7 +645,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            code = verb_code($wiz, "_test_destructure");
+            code = verb_code(this, "_test_destructure");
             found = 0;
 
             if (typeof(code) == LIST)
@@ -650,7 +664,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            vlist = verbs($wiz);
+            vlist = verbs(this);
             if ("_test_destructure" in vlist)
               player:tell("PASS: verbs()");
               passed = passed + 1;
@@ -669,9 +683,9 @@ public static partial class WorldSeeder {
             endif
 
             vnum = "_test_destructure" in vlist;
-            info = verb_info($wiz, vnum);
-            argspec = verb_args($wiz, vnum);
-            code = verb_code($wiz, vnum);
+            info = verb_info(this, vnum);
+            argspec = verb_args(this, vnum);
+            code = verb_code(this, vnum);
             if (info[3] == "_test_destructure" && argspec[1] == "none" && argspec[2] == "none" && argspec[3] == "none" && typeof(code) == LIST)
               player:tell("PASS: numeric verb_info()/verb_args()/verb_code()");
               passed = passed + 1;
@@ -730,7 +744,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            if (is_clear_property($wiz, "_test_clear_property") && !is_clear_property($root, "description"))
+            if (is_clear_property(this, "_test_clear_property") && !is_clear_property($root, "description"))
               player:tell("PASS: is_clear_property()");
               passed = passed + 1;
             else
@@ -855,7 +869,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            if (tostr("obj=", player) == "obj=#2")
+            if (tostr("obj=", player) == tostr("obj=#", toint(player)))
               player:tell("PASS: tostr()");
               passed = passed + 1;
             else
@@ -863,7 +877,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            if (toint(34) == 34 && toint(-34) == -34 && toint(player) == 2)
+            if (toint(34) == 34 && toint(-34) == -34 && toobj(toint(player)) == player)
               player:tell("PASS: toint() scalar conversions");
               passed = passed + 1;
             else
@@ -974,7 +988,7 @@ public static partial class WorldSeeder {
             endif
 
             literal = toliteral({1, "two", player, E_PERM});
-            if (literal == "{1, \"two\", #2, E_PERM}")
+            if (literal == tostr("{1, \"two\", ", player, ", E_PERM}"))
               player:tell("PASS: toliteral()");
               passed = passed + 1;
             else
@@ -1325,16 +1339,25 @@ public static partial class WorldSeeder {
             player:tell(passed, " builtin tests passed, ", failed, " failed.");
         """));
 
-        wiz.Verbs.Add(ScriptVerb(["@test-scripts"], """
+        tester.Verbs.Add(ScriptVerb(["@test-scripts"], """
             player:tell("Running miniMOO script command tests...");
 
             passed = 0;
             failed = 0;
 
             start = player.location;
+            token = tostr(random(999999));
+            thing_alias = "stthing" + token;
+            toy_alias = "sttoy" + token;
+            corify_name = "stproto" + token;
+            out_name = "testnorth" + token;
+            out_alias = "tn" + token;
+            back_name = "testsouth" + token;
+            back_alias = "ts" + token;
+            room_name = "Script Test Room " + token;
 
             before = length(player.contents);
-            eval_command("@create $thing named Script Test Thing,stthing");
+            eval_command(tostr("@create $thing named Script Test Thing ", token, ",", thing_alias));
             if (length(player.contents) == before + 1)
               player:tell("PASS: eval_command() @create");
               passed = passed + 1;
@@ -1343,9 +1366,10 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            eval_command("@dig testnorth,tn|testsouth,ts to Script Test Room");
-            exit = start:match_exit("tn");
-            if (valid(exit) && exit.dest.name == "Script Test Room")
+            eval_command(tostr("@dig ", out_name, ",", out_alias, "|", back_name, ",", back_alias, " to ", room_name));
+            exit = start:match_exit(out_alias);
+            exit_dest = start:match_exit(out_alias).dest;
+            if (valid(exit) && valid(exit_dest) && exit_dest.name == room_name)
               player:tell("PASS: eval_command() @dig creates exit and room");
               passed = passed + 1;
             else
@@ -1353,8 +1377,8 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            eval_command("tn");
-            if (player.location == exit.dest)
+            eval_command(out_alias);
+            if (valid(exit_dest) && player.location == exit_dest)
               player:tell("PASS: eval_command() exit alias movement");
               passed = passed + 1;
             else
@@ -1362,7 +1386,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            eval_command("ts");
+            eval_command(back_alias);
             if (player.location == start)
               player:tell("PASS: eval_command() return exit movement");
               passed = passed + 1;
@@ -1387,8 +1411,8 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            eval_command("@create $thing named Script Test Toy,sttoy");
-            toy = player:match("sttoy");
+            eval_command(tostr("@create $thing named Script Test Toy ", token, ",", toy_alias));
+            toy = player:match(toy_alias);
             if (valid(toy))
               player:tell("PASS: eval_command() @create test toy");
               passed = passed + 1;
@@ -1397,7 +1421,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            eval_command("@property sttoy.wound");
+            eval_command(tostr("@property ", toy_alias, ".wound"));
             if ($object_utils:has_property(toy, "wound") && toy.wound == 0)
               player:tell("PASS: eval_command() @property");
               passed = passed + 1;
@@ -1406,7 +1430,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            eval_command("@set sttoy.wound to 1");
+            eval_command(tostr("@set ", toy_alias, ".wound to 1"));
             if (toy.wound == 1)
               player:tell("PASS: eval_command() @set");
               passed = passed + 1;
@@ -1415,7 +1439,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            eval_command("@startup sttoy is \"starts rolling.\"");
+            eval_command(tostr("@startup ", toy_alias, " is \"starts rolling.\""));
             if (toy.startup_msg == "starts rolling.")
               player:tell("PASS: eval_command() @message assignment");
               passed = passed + 1;
@@ -1424,7 +1448,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            eval_command("@verb sttoy:wind this");
+            eval_command(tostr("@verb ", toy_alias, ":wind this"));
             if ($object_utils:has_verb(toy, "wind"))
               player:tell("PASS: eval_command() @verb");
               passed = passed + 1;
@@ -1433,7 +1457,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            eval_command("@verb sttoy:\"d*rop th*row\" this");
+            eval_command(tostr("@verb ", toy_alias, ":\"d*rop th*row\" this"));
             if ($object_utils:has_verb(toy, "drop") && $object_utils:has_verb(toy, "throw"))
               player:tell("PASS: eval_command() @verb quoted wildcard names");
               passed = passed + 1;
@@ -1442,7 +1466,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            eval_command("@program sttoy:wind", {"player:tell(\"Script toy winds.\");", "."});
+            eval_command(tostr("@program ", toy_alias, ":wind"), {"player:tell(\"Script toy winds.\");", "."});
             code = verb_code(toy, "wind");
             if (length(code) == 1 && $string_utils:trim(code[1]) == "player:tell(\"Script toy winds.\");")
               player:tell("PASS: eval_command() @program");
@@ -1452,7 +1476,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            eval_command("@edit sttoy:wind", {"replace 1", "player:tell(\"Script toy edited.\");", "compile"});
+            eval_command(tostr("@edit ", toy_alias, ":wind"), {"replace 1", "player:tell(\"Script toy edited.\");", "compile"});
             code = verb_code(toy, "wind");
             if (length(code) == 1 && $string_utils:trim(code[1]) == "player:tell(\"Script toy edited.\");")
               player:tell("PASS: eval_command() @edit");
@@ -1462,7 +1486,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            eval_command("@program sttoy:drop", {"pass(@args);", "player:tell(\"Script toy drops.\");", "."});
+            eval_command(tostr("@program ", toy_alias, ":drop"), {"pass(@args);", "player:tell(\"Script toy drops.\");", "."});
             code = verb_code(toy, "throw");
             if (length(code) == 2 && $string_utils:trim(code[1]) == "pass(@args);" && $string_utils:trim(code[2]) == "player:tell(\"Script toy drops.\");")
               player:tell("PASS: eval_command() @program wildcard verb");
@@ -1472,7 +1496,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            eval_command("drop sttoy");
+            eval_command(tostr("drop ", toy_alias));
             if (toy.location == player.location)
               player:tell("PASS: eval_command() command pass()");
               passed = passed + 1;
@@ -1481,7 +1505,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            if (eval_command("@list sttoy:wind"))
+            if (eval_command(tostr("@list ", toy_alias, ":wind")))
               player:tell("PASS: eval_command() @list programmed verb");
               passed = passed + 1;
             else
@@ -1489,7 +1513,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            if (eval_command("@display sttoy:"))
+            if (eval_command(tostr("@display ", toy_alias, ":")))
               player:tell("PASS: eval_command() @display verbs");
               passed = passed + 1;
             else
@@ -1497,7 +1521,7 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
-            if (eval_command("wind sttoy"))
+            if (eval_command(tostr("wind ", toy_alias)))
               player:tell("PASS: eval_command() programmed verb execution");
               passed = passed + 1;
             else
@@ -1552,6 +1576,15 @@ public static partial class WorldSeeder {
               failed = failed + 1;
             endif
 
+            eval_command(tostr("@corify ", toy_alias, " as ", corify_name));
+            if (toy.name == ("$" + corify_name) && #0.(corify_name) == toy && toy.location == $nothing && toy.f && toy._db == "core")
+              player:tell("PASS: eval_command() @corify");
+              passed = passed + 1;
+            else
+              player:tell("FAIL: eval_command() @corify");
+              failed = failed + 1;
+            endif
+
             if (eval_command("@dump-db"))
               player:tell("PASS: eval_command() @dump-db");
               passed = passed + 1;
@@ -1564,7 +1597,7 @@ public static partial class WorldSeeder {
             player:tell(passed, " script command tests passed, ", failed, " failed.");
         """));
 
-        wiz.Verbs.Add(ScriptVerb(["@test"], """
+        tester.Verbs.Add(ScriptVerb(["@test"], """
             eval_command("@test-builtins");
             eval_command("@test-scripts");
         """));

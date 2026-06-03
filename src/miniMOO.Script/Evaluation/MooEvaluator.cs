@@ -931,6 +931,9 @@ public sealed class MooEvaluator {
             "eval_command" => await EvalCommandAsync(args),
             "checkpoint" => await CheckpointAsync(args),
             "shutdown" => await ShutdownAsync(args),
+            "boot_player" => await BootPlayerAsync(args),
+            "connected_players" => ConnectedPlayers(args),
+            "server_version" => ServerVersion(args),
             "valid" => Valid(args),
             "is_player" => IsPlayer(args),
             "length" => Length(args),
@@ -1287,6 +1290,31 @@ public sealed class MooEvaluator {
             : MooToString(args[0]);
 
         return await _context.World.ShutdownAsync(message);
+    }
+
+    private async Task<MooValue> BootPlayerAsync(IReadOnlyList<MooValue> args) {
+        if (args.Count != 1 || args[0] is not MooValue.Object player)
+            throw MooError(MooErrorCode.E_TYPE, "boot_player() requires an object argument.");
+
+        await _context.World.BootPlayerAsync(player.Value);
+        return MooValue.NothingValue;
+    }
+
+    private MooValue ConnectedPlayers(IReadOnlyList<MooValue> args) {
+        if (args.Count > 0)
+            throw MooError(MooErrorCode.E_ARGS, "connected_players() does not take arguments.");
+
+        return new MooValue.List(
+            _context.World.GetConnectedPlayers()
+                .Select(id => (MooValue)new MooValue.Object(id))
+                .ToList());
+    }
+
+    private static MooValue ServerVersion(IReadOnlyList<MooValue> args) {
+        if (args.Count > 0)
+            throw MooError(MooErrorCode.E_ARGS, "server_version() does not take arguments.");
+
+        return new MooValue.String("miniMOO/.NET 10");
     }
 
     private static MooValue ListSet(IReadOnlyList<MooValue> args) {
